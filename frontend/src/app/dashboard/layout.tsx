@@ -36,13 +36,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <Logo width={160} />
               </Link>
               <div className="hidden sm:flex items-center gap-4">
-                <Link href="/dashboard" className="text-sm font-medium text-gray-700 hover:text-blue-600">
+                <Link href="/dashboard" className="text-sm font-medium text-gray-700 hover:text-brand">
                   Dashboard
                 </Link>
-                <Link href="/dashboard/profile" className="text-sm font-medium text-gray-700 hover:text-blue-600">
+                <Link href="/dashboard/profile" className="text-sm font-medium text-gray-700 hover:text-brand">
                   Profile
                 </Link>
-                <Link href="/dashboard/calculator" className="text-sm font-medium text-gray-700 hover:text-blue-600">
+                <Link href="/dashboard/calculator" className="text-sm font-medium text-gray-700 hover:text-brand">
                   Calculator
                 </Link>
               </div>

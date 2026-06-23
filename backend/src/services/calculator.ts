@@ -45,7 +45,30 @@ export interface CalculatorResult {
   passesServiceability: boolean;
   passesDti: boolean;
   messages: string[];
+  /**
+   * CommBank-style repayment breakdown for the final borrowing amount,
+   * computed at the ACTUAL interest rate (no stress buffer). Useful for
+   * presenting an "estimated repayments" view alongside the serviceability
+   * figure (which uses the stressed rate).
+   */
+  repaymentBreakdown: RepaymentBreakdown;
 }
+
+export interface RepaymentBreakdown {
+  monthly: number;
+  fortnightly: number;
+  weekly: number;
+  totalInterest: number;
+  totalRepayments: number;
+}
+
+const ZERO_REPAYMENT_BREAKDOWN: RepaymentBreakdown = {
+  monthly: 0,
+  fortnightly: 0,
+  weekly: 0,
+  totalInterest: 0,
+  totalRepayments: 0,
+};
 
 /**
  * Determine if an income type is variable (non-salary).
@@ -113,6 +136,50 @@ export function calculateMaxLoanFromPayment(
 }
 
 /**
+ * Compute a CommBank-style repayment breakdown for a loan at a GIVEN (actual)
+ * interest rate across monthly/fortnightly/weekly frequencies, plus the total
+ * interest and total repayments over the term.
+ *
+ * The monthly figure uses the standard amortization (P&I) or interest-only
+ * formula via `calculateMonthlyRepayment`. Fortnightly and weekly amounts are
+ * derived from the monthly repayment using the conventional conversions
+ * (fortnightly = monthly * 12 / 26, weekly = monthly * 12 / 52). This is a
+ * deliberate approximation that keeps the annual repayment total consistent
+ * across frequencies rather than re-solving per shorter period.
+ */
+export function computeRepaymentBreakdown(
+  principal: number,
+  annualRate: number,
+  termYears: number,
+  repaymentType: 'PI' | 'IO'
+): RepaymentBreakdown {
+  if (principal <= 0 || termYears <= 0) {
+    return { ...ZERO_REPAYMENT_BREAKDOWN };
+  }
+
+  const monthly = calculateMonthlyRepayment(principal, annualRate, termYears, repaymentType);
+
+  let totalInterest: number;
+  let totalRepayments: number;
+  if (repaymentType === 'IO') {
+    // Interest accrues for the whole term; principal repaid at the end.
+    totalInterest = principal * annualRate * termYears;
+    totalRepayments = totalInterest + principal;
+  } else {
+    totalRepayments = monthly * termYears * 12;
+    totalInterest = totalRepayments - principal;
+  }
+
+  return {
+    monthly,
+    fortnightly: (monthly * 12) / 26,
+    weekly: (monthly * 12) / 52,
+    totalInterest,
+    totalRepayments,
+  };
+}
+
+/**
  * Main borrowing capacity calculation.
  */
 export function calculateBorrowingCapacity(input: CalculatorInput): CalculatorResult {
@@ -174,6 +241,7 @@ export function calculateBorrowingCapacity(input: CalculatorInput): CalculatorRe
       passesServiceability: false,
       passesDti: false,
       messages,
+      repaymentBreakdown: { ...ZERO_REPAYMENT_BREAKDOWN },
     };
   }
 
@@ -218,6 +286,14 @@ export function calculateBorrowingCapacity(input: CalculatorInput): CalculatorRe
     messages.push('Passes both serviceability and DTI checks.');
   }
 
+  // Repayment breakdown for the final amount at the ACTUAL (un-stressed) rate.
+  const repaymentBreakdown = computeRepaymentBreakdown(
+    maxBorrowingCapacity,
+    input.interestRate,
+    input.loanTermYears,
+    input.repaymentType
+  );
+
   return {
     totalMonthlyIncome,
     totalMonthlyExpenses,
@@ -230,5 +306,6 @@ export function calculateBorrowingCapacity(input: CalculatorInput): CalculatorRe
     passesServiceability,
     passesDti,
     messages,
+    repaymentBreakdown,
   };
 }

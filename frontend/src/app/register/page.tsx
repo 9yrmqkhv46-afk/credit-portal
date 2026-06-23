@@ -59,7 +59,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-slate-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-light via-white to-slate-50 px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center justify-center" aria-label="TransformBiz home">
@@ -68,7 +68,7 @@ export default function RegisterPage() {
           <h2 className="mt-6 text-2xl font-bold text-gray-900">Create your account</h2>
           <p className="mt-2 text-sm text-gray-600">
             Already have an account?{' '}
-            <Link href="/login" className="text-blue-600 hover:text-blue-700 font-medium">
+            <Link href="/login" className="text-brand hover:text-brand-dark font-medium">
               Sign in
             </Link>
           </p>

@@ -108,7 +108,9 @@ const incomeSourceSchema = z.object({
   type: z.enum(['SALARY', 'BONUS', 'COMMISSION', 'RENTAL', 'INVESTMENT', 'GOVERNMENT', 'OTHER']),
   amount: z.number().positive(),
   frequency: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']),
-  description: z.string().optional(),
+  // Defensive: accept null for the optional free-text description so a blank
+  // field coming from the UI does not trigger a 400.
+  description: z.string().nullable().optional(),
 });
 
 // GET /api/client/income-sources
@@ -235,10 +237,12 @@ router.delete('/income-sources/:id', async (req: AuthRequest, res: Response): Pr
 const debtSchema = z.object({
   type: z.enum(['HOME_LOAN', 'PERSONAL_LOAN', 'CAR_LOAN', 'CREDIT_CARD', 'HECS', 'OTHER']),
   outstandingBalance: z.number().min(0),
-  monthlyRepayment: z.number().min(0).optional(),
-  interestRate: z.number().min(0).optional(),
-  creditLimit: z.number().min(0).optional(),
-  description: z.string().optional(),
+  // Optional numeric fields are nullable: the profile wizard sends `null` for
+  // blank inputs, and Prisma stores null in these nullable columns.
+  monthlyRepayment: z.number().min(0).nullable().optional(),
+  interestRate: z.number().min(0).nullable().optional(),
+  creditLimit: z.number().min(0).nullable().optional(),
+  description: z.string().nullable().optional(),
 });
 
 // GET /api/client/existing-debts
@@ -365,10 +369,12 @@ router.delete('/existing-debts/:id', async (req: AuthRequest, res: Response): Pr
 const propertySchema = z.object({
   type: z.enum(['OWNER_OCCUPIED', 'INVESTMENT', 'RENTAL']),
   address: z.string().min(1, 'Address is required'),
-  estimatedValue: z.number().positive(),
-  mortgageBalance: z.number().min(0).optional(),
-  rentalIncome: z.number().min(0).optional(),
-  description: z.string().optional(),
+  estimatedValue: z.number().positive('Estimated value must be greater than 0'),
+  // Optional numeric fields are nullable: the profile wizard sends `null` for
+  // blank inputs, and Prisma stores null in these nullable columns.
+  mortgageBalance: z.number().min(0).nullable().optional(),
+  rentalIncome: z.number().min(0).nullable().optional(),
+  description: z.string().nullable().optional(),
 });
 
 // GET /api/client/properties
@@ -493,21 +499,21 @@ router.delete('/properties/:id', async (req: AuthRequest, res: Response): Promis
 // === Expense Summary ===
 
 const expenseSchema = z.object({
-  groceries: z.number().min(0).optional(),
+  groceries: z.number().min(0).nullable().optional(),
   groceriesFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  utilities: z.number().min(0).optional(),
+  utilities: z.number().min(0).nullable().optional(),
   utilitiesFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  transport: z.number().min(0).optional(),
+  transport: z.number().min(0).nullable().optional(),
   transportFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  insurance: z.number().min(0).optional(),
+  insurance: z.number().min(0).nullable().optional(),
   insuranceFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  education: z.number().min(0).optional(),
+  education: z.number().min(0).nullable().optional(),
   educationFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  childcare: z.number().min(0).optional(),
+  childcare: z.number().min(0).nullable().optional(),
   childcareFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  entertainment: z.number().min(0).optional(),
+  entertainment: z.number().min(0).nullable().optional(),
   entertainmentFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  otherExpenses: z.number().min(0).optional(),
+  otherExpenses: z.number().min(0).nullable().optional(),
   otherExpensesFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
 });
 

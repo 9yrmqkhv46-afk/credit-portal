@@ -47,7 +47,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-slate-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-light via-white to-slate-50 px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center justify-center" aria-label="TransformBiz home">
@@ -56,7 +56,7 @@ export default function LoginPage() {
           <h2 className="mt-6 text-2xl font-bold text-gray-900">Sign in to your account</h2>
           <p className="mt-2 text-sm text-gray-600">
             Or{' '}
-            <Link href="/register" className="text-blue-600 hover:text-blue-700 font-medium">
+            <Link href="/register" className="text-brand hover:text-brand-dark font-medium">
               create a new account
             </Link>
           </p>
@@ -97,7 +97,7 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-gray-600">
           Administrator?{' '}
-          <Link href="/admin-login" className="text-blue-600 hover:text-blue-700 font-medium">
+          <Link href="/admin-login" className="text-brand hover:text-brand-dark font-medium">
             Sign in here
           </Link>
         </p>

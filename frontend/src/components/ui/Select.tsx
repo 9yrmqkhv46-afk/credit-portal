@@ -25,7 +25,7 @@ export function Select({ label, error, options, className = '', id, ...props }: 
       )}
       <select
         id={selectId}
-        className={`block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none sm:text-sm ${error ? 'border-red-500' : ''} ${className}`}
+        className={`block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-gray-900 transition-colors focus:border-brand focus:ring-2 focus:ring-brand/30 focus:outline-none sm:text-sm ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : ''} ${className}`}
         {...props}
       >
         {options.map((option) => (

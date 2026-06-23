@@ -10,6 +10,18 @@
   --color-foreground: var(--foreground);
 }
 
+/*
+ * TransformBiz brand palette (dark teal).
+ * Defining these as `--color-*` tokens makes Tailwind v4 generate the matching
+ * utilities automatically, e.g. bg-brand, text-brand, border-brand, ring-brand,
+ * bg-brand-dark, bg-brand-light, hover:bg-brand-dark, focus:ring-brand, etc.
+ */
+@theme {
+  --color-brand: #2c5f66;
+  --color-brand-dark: #244e54;
+  --color-brand-light: #e6eef0;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

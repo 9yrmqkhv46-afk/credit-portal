@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Alert';
 import api from '@/lib/api';
 import { LoanScenario } from '@/types';
+import { computeRepayments } from '@/lib/repayments';
 
 function formatCurrency(value: number | null | undefined): string {
   if (value == null) return '--';
@@ -21,12 +22,21 @@ function formatPercent(value: number | null | undefined): string {
   return `${value.toFixed(2)}x`;
 }
 
+type FrequencyKey = 'monthly' | 'fortnightly' | 'weekly';
+
+const FREQUENCY_TABS: { key: FrequencyKey; label: string }[] = [
+  { key: 'monthly', label: 'Monthly' },
+  { key: 'fortnightly', label: 'Fortnightly' },
+  { key: 'weekly', label: 'Weekly' },
+];
+
 export default function ResultsPage() {
   const params = useParams();
   const id = params.id as string;
   const [scenario, setScenario] = useState<LoanScenario | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [frequency, setFrequency] = useState<FrequencyKey>('monthly');
 
   useEffect(() => {
     const fetchScenario = async () => {
@@ -49,6 +59,18 @@ export default function ResultsPage() {
   const messages = scenario.messages ? JSON.parse(scenario.messages) : [];
   const passesAll = scenario.passesServiceability && scenario.passesDti;
 
+  // Recompute the CommBank-style repayment breakdown client-side from the saved
+  // scenario, at the ACTUAL interest rate (no stress buffer).
+  const principal = scenario.maxBorrowingCapacity ?? 0;
+  const actualRatePct = (scenario.interestRate * 100).toFixed(2);
+  const repayments = computeRepayments(
+    principal,
+    scenario.interestRate,
+    scenario.loanTermYears,
+    scenario.repaymentType
+  );
+  const selectedRepayment = repayments[frequency];
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex justify-between items-start">
@@ -63,10 +85,10 @@ export default function ResultsPage() {
         </Link>
       </div>
 
-      {/* Main Result */}
-      <Card className="text-center">
+      {/* Main Result (hero) */}
+      <Card className="text-center bg-gradient-to-b from-brand-light/60 to-white">
         <p className="text-sm text-gray-600 uppercase tracking-wide font-medium">Maximum Borrowing Capacity</p>
-        <p className="text-4xl font-bold text-blue-600 mt-2">
+        <p className="text-4xl font-bold text-brand mt-2">
           {formatCurrency(scenario.maxBorrowingCapacity)}
         </p>
         <div className="mt-4">
@@ -76,6 +98,56 @@ export default function ResultsPage() {
             <Badge variant="danger">Capacity Limited</Badge>
           )}
         </div>
+      </Card>
+
+      {/* Estimated Repayments (CommBank-style, at actual rate) */}
+      <Card>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Estimated Repayments</h3>
+            <p className="text-sm text-gray-500">At your {actualRatePct}% rate over {scenario.loanTermYears} years</p>
+          </div>
+          {/* Frequency toggle */}
+          <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+            {FREQUENCY_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setFrequency(tab.key)}
+                className={[
+                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  frequency === tab.key ? 'bg-brand text-white shadow-sm' : 'text-gray-600 hover:text-gray-900',
+                ].join(' ')}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-baseline gap-2">
+          <span className="text-4xl font-bold text-gray-900">{formatCurrency(selectedRepayment)}</span>
+          <span className="text-sm text-gray-500">/ {frequency}</span>
+        </div>
+
+        <dl className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-4">
+            <dt className="text-xs uppercase tracking-wide text-gray-500">Monthly</dt>
+            <dd className="mt-1 text-lg font-semibold text-gray-900">{formatCurrency(repayments.monthly)}</dd>
+          </div>
+          <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-4">
+            <dt className="text-xs uppercase tracking-wide text-gray-500">Total Interest</dt>
+            <dd className="mt-1 text-lg font-semibold text-gray-900">{formatCurrency(repayments.totalInterest)}</dd>
+          </div>
+          <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-4">
+            <dt className="text-xs uppercase tracking-wide text-gray-500">Total Cost</dt>
+            <dd className="mt-1 text-lg font-semibold text-gray-900">{formatCurrency(repayments.totalRepayments)}</dd>
+          </div>
+        </dl>
+        <p className="mt-3 text-xs text-gray-400">
+          Estimate only. {scenario.repaymentType === 'PI' ? 'Principal & Interest' : 'Interest Only'} at the actual rate;
+          total cost includes principal plus interest over the full term.
+        </p>
       </Card>
 
       {/* Breakdown */}
@@ -109,7 +181,7 @@ export default function ResultsPage() {
             </div>
             <div className="border-t pt-3 flex justify-between">
               <dt className="text-sm font-medium text-gray-900">Final (lower of the two)</dt>
-              <dd className="text-sm font-bold text-blue-600">{formatCurrency(scenario.maxBorrowingCapacity)}</dd>
+              <dd className="text-sm font-bold text-brand">{formatCurrency(scenario.maxBorrowingCapacity)}</dd>
             </div>
           </dl>
         </Card>
@@ -145,11 +217,12 @@ export default function ResultsPage() {
         </div>
       </Card>
 
-      {/* Monthly Repayment */}
-      <Card title="Monthly Repayment at Stress Rate">
-        <p className="text-3xl font-bold text-gray-900">{formatCurrency(scenario.monthlyRepayment)}</p>
+      {/* Serviceability assessment repayment (stress rate) */}
+      <Card title="Serviceability Assessment (Stress Rate)">
+        <p className="text-3xl font-bold text-gray-900">{formatCurrency(scenario.monthlyRepayment)}<span className="text-base font-normal text-gray-500"> / month</span></p>
         <p className="text-sm text-gray-600 mt-1">
-          Based on {((scenario.interestRate * 100) + 3).toFixed(1)}% stress rate ({(scenario.interestRate * 100).toFixed(1)}% + 3% buffer)
+          This is the assessment figure used to test serviceability, based on a {((scenario.interestRate * 100) + 3).toFixed(1)}% stress rate
+          ({(scenario.interestRate * 100).toFixed(1)}% + 3% buffer). Your estimated repayments above use your actual {actualRatePct}% rate.
         </p>
       </Card>
 
@@ -159,7 +232,7 @@ export default function ResultsPage() {
           <ul className="space-y-2">
             {messages.map((msg: string, idx: number) => (
               <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
-                <span className="text-blue-500 mt-0.5">&#8226;</span>
+                <span className="text-brand mt-0.5">&#8226;</span>
                 {msg}
               </li>
             ))}

@@ -8,6 +8,7 @@ import { Select } from '@/components/ui/Select';
 import { Alert } from '@/components/ui/Alert';
 import { Spinner } from '@/components/ui/Spinner';
 import api from '@/lib/api';
+import { AxiosError } from 'axios';
 import {
   ClientProfile, ClientProfileInput, IncomeSource, IncomeSourceInput,
   ExistingDebt, ExistingDebtInput, Property, PropertyInput,
@@ -15,6 +16,24 @@ import {
 } from '@/types';
 
 const STEPS = ['Personal Details', 'Dependants', 'Income Sources', 'Existing Debts', 'Properties', 'Expenses'];
+const STEP_HELP = [
+  'Tell us a little about yourself so we can tailor your assessment.',
+  'Dependants affect your minimum living expenses in the calculation.',
+  'Add every income stream. Variable income is shaded at 80%.',
+  'List any existing loans or credit cards you are servicing.',
+  'Add properties you own. Optional fields can be left blank.',
+  'Your declared monthly living expenses for serviceability.',
+];
+
+/**
+ * Pull the most specific human-readable message out of an Axios error,
+ * preferring backend Zod validation details, then the backend `error`
+ * string, then a sensible fallback.
+ */
+function extractApiError(err: unknown, fallback: string): string {
+  const ax = err as AxiosError<{ error?: string; details?: { message: string }[] }>;
+  return ax.response?.data?.details?.[0]?.message || ax.response?.data?.error || fallback;
+}
 
 const FREQUENCY_OPTIONS = [
   { value: 'WEEKLY', label: 'Weekly' },
@@ -75,6 +94,62 @@ const PROPERTY_TYPE_OPTIONS = [
   { value: 'INVESTMENT', label: 'Investment' },
   { value: 'RENTAL', label: 'Rental' },
 ];
+
+/** Horizontal numbered step indicator with a connecting line. */
+function StepProgress({
+  steps, current, onSelect,
+}: { steps: string[]; current: number; onSelect: (i: number) => void }) {
+  return (
+    <nav aria-label="Profile progress" className="overflow-x-auto">
+      <ol className="flex min-w-max items-center gap-0 sm:min-w-0">
+        {steps.map((label, i) => {
+          const isComplete = i < current;
+          const isCurrent = i === current;
+          return (
+            <li key={label} className="flex flex-1 items-center">
+              <button
+                type="button"
+                onClick={() => onSelect(i)}
+                className="group flex flex-col items-center gap-1.5 px-2 focus:outline-none"
+                aria-current={isCurrent ? 'step' : undefined}
+              >
+                <span
+                  className={[
+                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors',
+                    isCurrent
+                      ? 'border-brand bg-brand text-white shadow-sm'
+                      : isComplete
+                        ? 'border-brand bg-brand-light text-brand'
+                        : 'border-gray-300 bg-white text-gray-400 group-hover:border-gray-400',
+                  ].join(' ')}
+                >
+                  {isComplete ? (
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 011.4-1.4l3.3 3.29 6.8-6.8a1 1 0 011.4 0z" clipRule="evenodd" />
+                    </svg>
+                  ) : (
+                    i + 1
+                  )}
+                </span>
+                <span
+                  className={[
+                    'hidden text-xs font-medium sm:block',
+                    isCurrent ? 'text-brand' : isComplete ? 'text-gray-700' : 'text-gray-400',
+                  ].join(' ')}
+                >
+                  {label}
+                </span>
+              </button>
+              {i < steps.length - 1 && (
+                <span className={`h-0.5 flex-1 ${i < current ? 'bg-brand' : 'bg-gray-200'}`} />
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
 
 export default function ProfilePage() {
   const [step, setStep] = useState(0);
@@ -191,7 +266,7 @@ export default function ProfilePage() {
         setProfileExists(true);
       }
       setSuccess('Personal details saved successfully.');
-    } catch { setError('Failed to save personal details.'); }
+    } catch (err) { setError(extractApiError(err, 'Failed to save personal details.')); }
     finally { setSaving(false); }
   };
 
@@ -204,7 +279,7 @@ export default function ProfilePage() {
         privateSchoolingFlag: profileData.privateSchoolingFlag,
       });
       setSuccess('Dependants saved successfully.');
-    } catch { setError('Failed to save dependant information.'); }
+    } catch (err) { setError(extractApiError(err, 'Failed to save dependant information.')); }
     finally { setSaving(false); }
   };
 
@@ -239,7 +314,7 @@ export default function ProfilePage() {
       }
       await fetchIncomeSources();
       setSuccess('Income sources saved successfully.');
-    } catch { setError('Failed to save income sources.'); }
+    } catch (err) { setError(extractApiError(err, 'Failed to save income sources.')); }
     finally { setSaving(false); }
   };
 
@@ -274,7 +349,7 @@ export default function ProfilePage() {
       }
       await fetchDebts();
       setSuccess('Existing debts saved successfully.');
-    } catch { setError('Failed to save existing debts.'); }
+    } catch (err) { setError(extractApiError(err, 'Failed to save existing debts.')); }
     finally { setSaving(false); }
   };
 
@@ -309,7 +384,7 @@ export default function ProfilePage() {
       }
       await fetchProperties();
       setSuccess('Properties saved successfully.');
-    } catch { setError('Failed to save properties.'); }
+    } catch (err) { setError(extractApiError(err, 'Failed to save properties.')); }
     finally { setSaving(false); }
   };
 
@@ -333,7 +408,7 @@ export default function ProfilePage() {
         setExpensesExist(true);
       }
       setSuccess('Expenses saved successfully.');
-    } catch { setError('Failed to save expenses.'); }
+    } catch (err) { setError(extractApiError(err, 'Failed to save expenses.')); }
     finally { setSaving(false); }
   };
 
@@ -356,24 +431,24 @@ export default function ProfilePage() {
         <p className="mt-1 text-gray-600">Complete your profile to get accurate borrowing calculations.</p>
       </div>
 
-      {/* Step Tabs */}
-      <div className="flex flex-wrap gap-2">
-        {STEPS.map((s, i) => (
-          <button key={s} onClick={() => setStep(i)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${i === step ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}`}>
-            {i + 1}. {s}
-          </button>
-        ))}
-      </div>
+      {/* Step progress indicator */}
+      <Card className="py-5">
+        <StepProgress steps={STEPS} current={step} onSelect={setStep} />
+      </Card>
 
       {error && <Alert variant="error">{error}</Alert>}
       {success && <Alert variant="success">{success}</Alert>}
 
       {/* Step Content */}
       <Card>
+        <div className="mb-5 border-b border-gray-100 pb-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand">Step {step + 1} of {STEPS.length}</p>
+          <h3 className="mt-1 text-lg font-semibold text-gray-900">{STEPS[step]}</h3>
+          <p className="mt-1 text-sm text-gray-500">{STEP_HELP[step]}</p>
+        </div>
+
         {step === 0 && (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Personal Details</h3>
             <div className="grid md:grid-cols-2 gap-4">
               <Input label="Phone" type="tel" value={profileData.phone || ''} onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })} />
               <Input label="Date of Birth" type="date" value={profileData.dateOfBirth || ''} onChange={(e) => setProfileData({ ...profileData, dateOfBirth: e.target.value })} />
@@ -387,13 +462,12 @@ export default function ProfilePage() {
 
         {step === 1 && (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Dependants</h3>
             <div className="grid md:grid-cols-2 gap-4">
               <Input label="Number of Adult Dependants" type="number" min="0" value={String(profileData.numberOfAdultDependants)} onChange={(e) => setProfileData({ ...profileData, numberOfAdultDependants: parseInt(e.target.value) || 0 })} />
               <Input label="Number of Child Dependants" type="number" min="0" value={String(profileData.numberOfChildDependants)} onChange={(e) => setProfileData({ ...profileData, numberOfChildDependants: parseInt(e.target.value) || 0 })} />
             </div>
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={profileData.privateSchoolingFlag} onChange={(e) => setProfileData({ ...profileData, privateSchoolingFlag: e.target.checked })} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              <input type="checkbox" checked={profileData.privateSchoolingFlag} onChange={(e) => setProfileData({ ...profileData, privateSchoolingFlag: e.target.checked })} className="rounded border-gray-300 text-brand focus:ring-brand" />
               <span className="text-sm text-gray-700">Private schooling</span>
             </label>
           </div>
@@ -402,13 +476,13 @@ export default function ProfilePage() {
         {step === 2 && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Income Sources</h3>
-              <Button variant="secondary" size="sm" onClick={addIncomeSource}>Add Income</Button>
+              <span className="text-sm font-medium text-gray-700">{incomeSources.length} income source{incomeSources.length === 1 ? '' : 's'}</span>
+              <Button variant="secondary" size="sm" onClick={addIncomeSource}>+ Add Income</Button>
             </div>
             {incomeSources.map((source, idx) => (
-              <div key={idx} className="border border-gray-200 rounded-lg p-4 space-y-3">
+              <div key={idx} className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-700">Income #{idx + 1}</span>
+                  <span className="text-sm font-semibold text-gray-700">Income #{idx + 1}</span>
                   <Button variant="danger" size="sm" onClick={() => removeIncomeSource(idx)}>Remove</Button>
                 </div>
                 <div className="grid md:grid-cols-2 gap-3">
@@ -419,62 +493,61 @@ export default function ProfilePage() {
                 </div>
               </div>
             ))}
-            {incomeSources.length === 0 && <p className="text-gray-500 text-sm">No income sources added. Click &quot;Add Income&quot; to get started.</p>}
+            {incomeSources.length === 0 && <p className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-gray-500 text-sm">No income sources added. Click &quot;Add Income&quot; to get started.</p>}
           </div>
         )}
 
         {step === 3 && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Existing Debts</h3>
-              <Button variant="secondary" size="sm" onClick={addDebt}>Add Debt</Button>
+              <span className="text-sm font-medium text-gray-700">{existingDebts.length} debt{existingDebts.length === 1 ? '' : 's'}</span>
+              <Button variant="secondary" size="sm" onClick={addDebt}>+ Add Debt</Button>
             </div>
             {existingDebts.map((debt, idx) => (
-              <div key={idx} className="border border-gray-200 rounded-lg p-4 space-y-3">
+              <div key={idx} className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-700">Debt #{idx + 1}</span>
+                  <span className="text-sm font-semibold text-gray-700">Debt #{idx + 1}</span>
                   <Button variant="danger" size="sm" onClick={() => removeDebt(idx)}>Remove</Button>
                 </div>
                 <div className="grid md:grid-cols-2 gap-3">
                   <Select label="Type" options={DEBT_TYPE_OPTIONS} value={debt.type} onChange={(e) => { const arr = [...existingDebts]; arr[idx] = { ...arr[idx], type: e.target.value as ExistingDebtInput['type'] }; setExistingDebts(arr); }} />
                   <Input label="Outstanding Balance" type="number" min="0" value={String(debt.outstandingBalance)} onChange={(e) => { const arr = [...existingDebts]; arr[idx] = { ...arr[idx], outstandingBalance: parseFloat(e.target.value) || 0 }; setExistingDebts(arr); }} />
-                  <Input label="Monthly Repayment" type="number" min="0" value={String(debt.monthlyRepayment || '')} onChange={(e) => { const arr = [...existingDebts]; arr[idx] = { ...arr[idx], monthlyRepayment: parseFloat(e.target.value) || null }; setExistingDebts(arr); }} />
-                  <Input label="Credit Limit" type="number" min="0" value={String(debt.creditLimit || '')} onChange={(e) => { const arr = [...existingDebts]; arr[idx] = { ...arr[idx], creditLimit: parseFloat(e.target.value) || null }; setExistingDebts(arr); }} />
+                  <Input label="Monthly Repayment" type="number" min="0" placeholder="Optional" value={String(debt.monthlyRepayment || '')} onChange={(e) => { const arr = [...existingDebts]; arr[idx] = { ...arr[idx], monthlyRepayment: parseFloat(e.target.value) || null }; setExistingDebts(arr); }} />
+                  <Input label="Credit Limit" type="number" min="0" placeholder="Optional" value={String(debt.creditLimit || '')} onChange={(e) => { const arr = [...existingDebts]; arr[idx] = { ...arr[idx], creditLimit: parseFloat(e.target.value) || null }; setExistingDebts(arr); }} />
                 </div>
               </div>
             ))}
-            {existingDebts.length === 0 && <p className="text-gray-500 text-sm">No existing debts. Click &quot;Add Debt&quot; if applicable.</p>}
+            {existingDebts.length === 0 && <p className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-gray-500 text-sm">No existing debts. Click &quot;Add Debt&quot; if applicable.</p>}
           </div>
         )}
 
         {step === 4 && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Properties</h3>
-              <Button variant="secondary" size="sm" onClick={addProperty}>Add Property</Button>
+              <span className="text-sm font-medium text-gray-700">{properties.length} propert{properties.length === 1 ? 'y' : 'ies'}</span>
+              <Button variant="secondary" size="sm" onClick={addProperty}>+ Add Property</Button>
             </div>
             {properties.map((prop, idx) => (
-              <div key={idx} className="border border-gray-200 rounded-lg p-4 space-y-3">
+              <div key={idx} className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-700">Property #{idx + 1}</span>
+                  <span className="text-sm font-semibold text-gray-700">Property #{idx + 1}</span>
                   <Button variant="danger" size="sm" onClick={() => removeProperty(idx)}>Remove</Button>
                 </div>
                 <div className="grid md:grid-cols-2 gap-3">
                   <Select label="Type" options={PROPERTY_TYPE_OPTIONS} value={prop.type} onChange={(e) => { const arr = [...properties]; arr[idx] = { ...arr[idx], type: e.target.value as PropertyInput['type'] }; setProperties(arr); }} />
                   <Input label="Address" value={prop.address} onChange={(e) => { const arr = [...properties]; arr[idx] = { ...arr[idx], address: e.target.value }; setProperties(arr); }} />
                   <Input label="Estimated Value" type="number" min="0" value={String(prop.estimatedValue)} onChange={(e) => { const arr = [...properties]; arr[idx] = { ...arr[idx], estimatedValue: parseFloat(e.target.value) || 0 }; setProperties(arr); }} />
-                  <Input label="Mortgage Balance" type="number" min="0" value={String(prop.mortgageBalance || '')} onChange={(e) => { const arr = [...properties]; arr[idx] = { ...arr[idx], mortgageBalance: parseFloat(e.target.value) || null }; setProperties(arr); }} />
-                  <Input label="Rental Income (monthly)" type="number" min="0" value={String(prop.rentalIncome || '')} onChange={(e) => { const arr = [...properties]; arr[idx] = { ...arr[idx], rentalIncome: parseFloat(e.target.value) || null }; setProperties(arr); }} />
+                  <Input label="Mortgage Balance" type="number" min="0" placeholder="Optional" value={String(prop.mortgageBalance || '')} onChange={(e) => { const arr = [...properties]; arr[idx] = { ...arr[idx], mortgageBalance: parseFloat(e.target.value) || null }; setProperties(arr); }} />
+                  <Input label="Rental Income (monthly)" type="number" min="0" placeholder="Optional" value={String(prop.rentalIncome || '')} onChange={(e) => { const arr = [...properties]; arr[idx] = { ...arr[idx], rentalIncome: parseFloat(e.target.value) || null }; setProperties(arr); }} />
                 </div>
               </div>
             ))}
-            {properties.length === 0 && <p className="text-gray-500 text-sm">No properties. Click &quot;Add Property&quot; if applicable.</p>}
+            {properties.length === 0 && <p className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-gray-500 text-sm">No properties. Click &quot;Add Property&quot; if applicable.</p>}
           </div>
         )}
 
         {step === 5 && (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Monthly Expenses</h3>
             <div className="grid md:grid-cols-2 gap-4">
               {([
                 ['groceries', 'groceriesFreq', 'Groceries'],
