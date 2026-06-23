@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #1e293b;
+  --background: #eef2f4;
+  --foreground: #16252a;
 }
 
 @theme inline {
@@ -22,8 +22,121 @@
   --color-brand-light: #e6eef0;
 }
 
-body {
+html {
+  /* Smooth scroll + a sensible base for the glass background to sit on. */
   background: var(--background);
+}
+
+body {
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /*
+   * Strong system font stack — deliberately NOT using next/font/google so the
+   * production build never performs a network font fetch (which can fail on
+   * Render). Tightened tracking + antialiasing give a premium feel.
+   */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, 'Noto Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 {
+  letter-spacing: -0.02em;
+}
+
+/* ===========================================================================
+ * Glassmorphism design system
+ * ---------------------------------------------------------------------------
+ * Reusable classes composed by components and pages. Defined as plain CSS in a
+ * Tailwind v4 @layer so the utilities can still be overridden by Tailwind
+ * classes when needed. Keep the number of large blurred layers reasonable for
+ * performance; blur radius is reduced on small screens.
+ * ======================================================================== */
+@layer utilities {
+  /* Full-page layered gradient used as the app backdrop. */
+  .app-gradient {
+    background:
+      radial-gradient(1100px 600px at 12% -10%, rgba(44, 95, 102, 0.18), transparent 60%),
+      radial-gradient(900px 600px at 100% 0%, rgba(16, 185, 129, 0.12), transparent 55%),
+      radial-gradient(900px 700px at 50% 120%, rgba(99, 102, 241, 0.12), transparent 60%),
+      linear-gradient(160deg, #eef3f5 0%, #e7edf1 40%, #eef1f6 100%);
+  }
+
+  /* Darker, cooler slate gradient for hero / admin surfaces. */
+  .app-gradient-dark {
+    background:
+      radial-gradient(1000px 600px at 10% -10%, rgba(44, 95, 102, 0.55), transparent 60%),
+      radial-gradient(900px 600px at 100% 10%, rgba(20, 60, 70, 0.55), transparent 55%),
+      radial-gradient(800px 700px at 60% 120%, rgba(30, 41, 59, 0.6), transparent 60%),
+      linear-gradient(160deg, #0f2429 0%, #15303a 45%, #1e293b 100%);
+  }
+
+  /* Light frosted glass panel — dark text on translucent white. */
+  .glass {
+    background-color: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 10px 30px -12px rgba(15, 36, 41, 0.25);
+  }
+
+  /* Dark frosted glass — white text on translucent slate, for hero/admin. */
+  .glass-dark {
+    background-color: rgba(15, 36, 41, 0.45);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 12px 36px -12px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Frosted nav/header bar. */
+  .glass-nav {
+    background-color: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+  }
+
+  .glass-nav-dark {
+    background-color: rgba(15, 36, 41, 0.6);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  /* Semi-transparent frosted form field. */
+  .glass-input {
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  /* Decorative blurred colour blobs sitting behind the glass. */
+  .glass-blob {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(70px);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  /* Reduce blur radius on small screens for performance + readability. */
+  @media (max-width: 640px) {
+    .glass,
+    .glass-dark {
+      backdrop-filter: blur(14px) saturate(150%);
+      -webkit-backdrop-filter: blur(14px) saturate(150%);
+    }
+    .glass-blob {
+      filter: blur(48px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition-duration: 0.001ms !important;
+    }
+  }
 }

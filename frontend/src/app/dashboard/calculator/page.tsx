@@ -59,8 +59,8 @@ export default function CalculatorPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Borrowing Calculator</h1>
-        <p className="mt-1 text-gray-600">Configure your loan scenario and calculate your maximum borrowing capacity.</p>
+        <h1 className="text-2xl font-bold text-slate-900">Borrowing Calculator</h1>
+        <p className="mt-1 text-slate-600">Configure your loan scenario and calculate your maximum borrowing capacity.</p>
       </div>
 
       {error && <Alert variant="error">{error}</Alert>}
@@ -100,7 +100,7 @@ export default function CalculatorPage() {
             onChange={(e) => setInterestRate(parseFloat(e.target.value) || 0)}
           />
 
-          <div className="bg-brand-light rounded-lg p-4 text-sm text-brand">
+          <div className="rounded-xl border border-brand/20 bg-brand-light/70 p-4 text-sm text-brand backdrop-blur-sm">
             <p className="font-semibold">How this works</p>
             <p className="mt-1">
               The calculator uses your complete financial profile (income, debts, expenses, dependants) to determine your maximum borrowing capacity. A stress rate buffer of 3% will be applied above your assumed interest rate.

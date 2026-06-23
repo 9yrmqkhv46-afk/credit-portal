@@ -35,6 +35,39 @@ function extractApiError(err: unknown, fallback: string): string {
   return ax.response?.data?.details?.[0]?.message || ax.response?.data?.error || fallback;
 }
 
+/**
+ * Coerce a user-entered value into a real, finite number, or `undefined` when
+ * it is blank / null / NaN. Used to build payloads that OMIT optional numeric
+ * fields entirely rather than sending `null` (which previously produced the
+ * backend Zod error "Expected number, received null").
+ */
+function optionalNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+  const n = typeof value === 'number' ? value : parseFloat(String(value));
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * Coerce a value into a real number, falling back to `fallback` (default 0)
+ * when blank / null / NaN. Used for required balance fields that should
+ * default to 0 rather than error.
+ */
+function requiredNumber(value: unknown, fallback = 0): number {
+  const n = optionalNumber(value);
+  return n === undefined ? fallback : n;
+}
+
+/**
+ * Remove any keys whose value is `undefined` so they are never serialized into
+ * the JSON body. This guarantees no `null`/`undefined` is sent for optional
+ * numeric fields — they are simply omitted.
+ */
+function compactPayload<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  ) as Partial<T>;
+}
+
 const FREQUENCY_OPTIONS = [
   { value: 'WEEKLY', label: 'Weekly' },
   { value: 'FORTNIGHTLY', label: 'Fortnightly' },
@@ -334,12 +367,16 @@ export default function ProfilePage() {
     setSaving(true); setError(''); setSuccess('');
     try {
       for (const debt of existingDebts) {
-        const payload = {
-          type: debt.type, outstandingBalance: Number(debt.outstandingBalance),
-          monthlyRepayment: debt.monthlyRepayment ? Number(debt.monthlyRepayment) : null,
-          interestRate: debt.interestRate ? Number(debt.interestRate) : null,
-          creditLimit: debt.creditLimit ? Number(debt.creditLimit) : null,
-        };
+        // Only include optional numeric fields when the user entered a real
+        // number; never send null/NaN. outstandingBalance is required and
+        // defaults to 0 when blank.
+        const payload = compactPayload({
+          type: debt.type,
+          outstandingBalance: requiredNumber(debt.outstandingBalance, 0),
+          monthlyRepayment: optionalNumber(debt.monthlyRepayment),
+          interestRate: optionalNumber(debt.interestRate),
+          creditLimit: optionalNumber(debt.creditLimit),
+        });
         if ('id' in debt && debt.id) {
           await api.put(`/client/existing-debts/${debt.id}`, payload);
         } else {
@@ -369,12 +406,28 @@ export default function ProfilePage() {
     setSaving(true); setError(''); setSuccess('');
     try {
       for (const prop of properties) {
-        const payload = {
-          type: prop.type, address: prop.address,
-          estimatedValue: Number(prop.estimatedValue),
-          mortgageBalance: prop.mortgageBalance ? Number(prop.mortgageBalance) : null,
-          rentalIncome: prop.rentalIncome ? Number(prop.rentalIncome) : null,
-        };
+        // Required fields validated client-side with clear messages so we never
+        // send a 0/null estimatedValue or an empty address to the backend.
+        const address = (prop.address || '').trim();
+        if (!address) {
+          setError('Each property needs an address.');
+          setSaving(false);
+          return;
+        }
+        const estimatedValue = optionalNumber(prop.estimatedValue);
+        if (estimatedValue === undefined || estimatedValue <= 0) {
+          setError('Each property needs an estimated value greater than 0.');
+          setSaving(false);
+          return;
+        }
+        // Only include optional numeric fields when a real number was entered.
+        const payload = compactPayload({
+          type: prop.type,
+          address,
+          estimatedValue,
+          mortgageBalance: optionalNumber(prop.mortgageBalance),
+          rentalIncome: optionalNumber(prop.rentalIncome),
+        });
         if ('id' in prop && prop.id) {
           await api.put(`/client/properties/${prop.id}`, payload);
         } else {
@@ -427,8 +480,8 @@ export default function ProfilePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Financial Profile</h1>
-        <p className="mt-1 text-gray-600">Complete your profile to get accurate borrowing calculations.</p>
+        <h1 className="text-2xl font-bold text-slate-900">Financial Profile</h1>
+        <p className="mt-1 text-slate-600">Complete your profile to get accurate borrowing calculations.</p>
       </div>
 
       {/* Step progress indicator */}
@@ -441,10 +494,10 @@ export default function ProfilePage() {
 
       {/* Step Content */}
       <Card>
-        <div className="mb-5 border-b border-gray-100 pb-4">
+        <div className="mb-5 border-b border-white/40 pb-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-brand">Step {step + 1} of {STEPS.length}</p>
-          <h3 className="mt-1 text-lg font-semibold text-gray-900">{STEPS[step]}</h3>
-          <p className="mt-1 text-sm text-gray-500">{STEP_HELP[step]}</p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-900">{STEPS[step]}</h3>
+          <p className="mt-1 text-sm text-slate-500">{STEP_HELP[step]}</p>
         </div>
 
         {step === 0 && (
@@ -480,9 +533,9 @@ export default function ProfilePage() {
               <Button variant="secondary" size="sm" onClick={addIncomeSource}>+ Add Income</Button>
             </div>
             {incomeSources.map((source, idx) => (
-              <div key={idx} className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
+              <div key={idx} className="rounded-xl border border-white/50 bg-white/40 p-4 space-y-3 backdrop-blur-sm">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-gray-700">Income #{idx + 1}</span>
+                  <span className="text-sm font-semibold text-slate-700">Income #{idx + 1}</span>
                   <Button variant="danger" size="sm" onClick={() => removeIncomeSource(idx)}>Remove</Button>
                 </div>
                 <div className="grid md:grid-cols-2 gap-3">
@@ -504,9 +557,9 @@ export default function ProfilePage() {
               <Button variant="secondary" size="sm" onClick={addDebt}>+ Add Debt</Button>
             </div>
             {existingDebts.map((debt, idx) => (
-              <div key={idx} className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
+              <div key={idx} className="rounded-xl border border-white/50 bg-white/40 p-4 space-y-3 backdrop-blur-sm">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-gray-700">Debt #{idx + 1}</span>
+                  <span className="text-sm font-semibold text-slate-700">Debt #{idx + 1}</span>
                   <Button variant="danger" size="sm" onClick={() => removeDebt(idx)}>Remove</Button>
                 </div>
                 <div className="grid md:grid-cols-2 gap-3">
@@ -528,9 +581,9 @@ export default function ProfilePage() {
               <Button variant="secondary" size="sm" onClick={addProperty}>+ Add Property</Button>
             </div>
             {properties.map((prop, idx) => (
-              <div key={idx} className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
+              <div key={idx} className="rounded-xl border border-white/50 bg-white/40 p-4 space-y-3 backdrop-blur-sm">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-gray-700">Property #{idx + 1}</span>
+                  <span className="text-sm font-semibold text-slate-700">Property #{idx + 1}</span>
                   <Button variant="danger" size="sm" onClick={() => removeProperty(idx)}>Remove</Button>
                 </div>
                 <div className="grid md:grid-cols-2 gap-3">

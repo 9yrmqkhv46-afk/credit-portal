@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { Logo } from '@/components/ui/Logo';
+import { GlassBackground } from '@/components/ui/GlassBackground';
 import { AxiosError } from 'axios';
 
 export default function LoginPage() {
@@ -47,14 +48,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-light via-white to-slate-50 px-4">
+    <div className="relative min-h-screen flex items-center justify-center px-4">
+      <GlassBackground variant="light" />
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center justify-center" aria-label="TransformBiz home">
-            <Logo width={240} />
+          <Link href="/" className="inline-flex items-center justify-center rounded-xl bg-white/70 px-4 py-2 shadow-sm backdrop-blur" aria-label="TransformBiz home">
+            <Logo width={220} />
           </Link>
-          <h2 className="mt-6 text-2xl font-bold text-gray-900">Sign in to your account</h2>
-          <p className="mt-2 text-sm text-gray-600">
+          <h2 className="mt-6 text-2xl font-bold text-slate-900">Sign in to your account</h2>
+          <p className="mt-2 text-sm text-slate-600">
             Or{' '}
             <Link href="/register" className="text-brand hover:text-brand-dark font-medium">
               create a new account
@@ -62,7 +64,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <div className="glass rounded-2xl p-8">
           {error && (
             <Alert variant="error" className="mb-4">
               {error}
@@ -90,12 +92,12 @@ export default function LoginPage() {
               Sign In
             </Button>
           </form>
-          <p className="mt-4 text-center text-xs text-gray-500">
+          <p className="mt-4 text-center text-xs text-slate-500">
             Admin and client accounts use the same sign-in.
           </p>
         </div>
 
-        <p className="mt-6 text-center text-sm text-gray-600">
+        <p className="mt-6 text-center text-sm text-slate-600">
           Administrator?{' '}
           <Link href="/admin-login" className="text-brand hover:text-brand-dark font-medium">
             Sign in here

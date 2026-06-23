@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { Logo } from '@/components/ui/Logo';
+import { GlassBackground } from '@/components/ui/GlassBackground';
 import { AxiosError } from 'axios';
 
 // Mirrors the backend policy in backend/src/routes/auth.ts.
@@ -59,14 +60,15 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-light via-white to-slate-50 px-4">
+    <div className="relative min-h-screen flex items-center justify-center px-4 py-10">
+      <GlassBackground variant="light" />
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center justify-center" aria-label="TransformBiz home">
-            <Logo width={240} />
+          <Link href="/" className="inline-flex items-center justify-center rounded-xl bg-white/70 px-4 py-2 shadow-sm backdrop-blur" aria-label="TransformBiz home">
+            <Logo width={220} />
           </Link>
-          <h2 className="mt-6 text-2xl font-bold text-gray-900">Create your account</h2>
-          <p className="mt-2 text-sm text-gray-600">
+          <h2 className="mt-6 text-2xl font-bold text-slate-900">Create your account</h2>
+          <p className="mt-2 text-sm text-slate-600">
             Already have an account?{' '}
             <Link href="/login" className="text-brand hover:text-brand-dark font-medium">
               Sign in
@@ -74,7 +76,7 @@ export default function RegisterPage() {
           </p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <div className="glass rounded-2xl p-8">
           {error && (
             <Alert variant="error" className="mb-4">
               {error}

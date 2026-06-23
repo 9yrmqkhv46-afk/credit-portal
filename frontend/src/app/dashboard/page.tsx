@@ -43,8 +43,8 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-gray-600">Welcome to your borrowing calculator portal.</p>
+        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+        <p className="mt-1 text-slate-600">Welcome to your borrowing calculator portal.</p>
       </div>
 
       {/* Status Cards */}
@@ -52,7 +52,7 @@ export default function DashboardPage() {
         <Card>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Profile Status</p>
+              <p className="text-sm text-slate-600">Profile Status</p>
               <p className="text-lg font-semibold mt-1">
                 {profileComplete ? (
                   <Badge variant="success">Complete</Badge>
@@ -71,8 +71,8 @@ export default function DashboardPage() {
 
         <Card>
           <div>
-            <p className="text-sm text-gray-600">Loan Scenarios</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{scenarios.length}</p>
+            <p className="text-sm text-slate-600">Loan Scenarios</p>
+            <p className="text-3xl font-bold text-slate-900 mt-1">{scenarios.length}</p>
           </div>
           <Link href="/dashboard/calculator" className="mt-4 block">
             <Button variant="primary" size="sm" className="w-full">
@@ -83,8 +83,8 @@ export default function DashboardPage() {
 
         <Card>
           <div>
-            <p className="text-sm text-gray-600">Latest Max Borrowing</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">
+            <p className="text-sm text-slate-600">Latest Max Borrowing</p>
+            <p className="text-3xl font-bold text-brand mt-1">
               {hasScenarios && scenarios[0].maxBorrowingCapacity != null
                 ? `$${scenarios[0].maxBorrowingCapacity.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
                 : '--'}
@@ -103,27 +103,27 @@ export default function DashboardPage() {
       {/* Recent Scenarios */}
       {recentScenarios.length > 0 && (
         <Card title="Recent Scenarios">
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-white/40">
             {recentScenarios.map((scenario) => (
               <Link
                 key={scenario.id}
                 href={`/dashboard/calculator/results/${scenario.id}`}
-                className="block py-3 hover:bg-gray-50 -mx-6 px-6 transition-colors"
+                className="block py-3 hover:bg-white/40 -mx-6 px-6 transition-colors"
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="font-medium text-gray-900">{scenario.purpose}</span>
-                    <span className="ml-3 text-sm text-gray-500">
+                    <span className="font-medium text-slate-900">{scenario.purpose}</span>
+                    <span className="ml-3 text-sm text-slate-500">
                       {scenario.repaymentType === 'PI' ? 'P&I' : 'Interest Only'} | {scenario.loanTermYears}yr
                     </span>
                   </div>
                   <div className="text-right">
-                    <span className="font-semibold text-gray-900">
+                    <span className="font-semibold text-slate-900">
                       {scenario.maxBorrowingCapacity != null
                         ? `$${scenario.maxBorrowingCapacity.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
                         : 'Pending'}
                     </span>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-slate-500">
                       {new Date(scenario.createdAt).toLocaleDateString()}
                     </p>
                   </div>

@@ -109,11 +109,11 @@ export default function AdminClientDetailPage() {
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
-          <Link href="/admin" className="text-sm text-brand hover:text-brand-dark mb-2 block">
+          <Link href="/admin" className="text-sm text-emerald-300 hover:text-emerald-200 mb-2 block">
             &larr; Back to Clients
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">{client.name}</h1>
-          <p className="text-gray-600">{client.email}</p>
+          <h1 className="text-2xl font-bold text-white">{client.name}</h1>
+          <p className="text-slate-300">{client.email}</p>
         </div>
         <div className="flex items-center gap-3">
           <Badge variant={getStatusVariant(profile?.status || 'Prospect')}>
@@ -193,25 +193,25 @@ export default function AdminClientDetailPage() {
         {client.loanScenarios.length > 0 ? (
           <div className="space-y-3">
             {client.loanScenarios.map((scenario) => (
-              <div key={scenario.id} className="border border-gray-200 rounded-lg p-4">
+              <div key={scenario.id} className="rounded-xl border border-white/50 bg-white/40 p-4">
                 <div className="flex justify-between items-center">
                   <div>
-                    <span className="font-medium text-gray-900">{scenario.purpose}</span>
-                    <span className="ml-3 text-sm text-gray-500">
+                    <span className="font-medium text-slate-900">{scenario.purpose}</span>
+                    <span className="ml-3 text-sm text-slate-500">
                       {scenario.repaymentType === 'PI' ? 'P&I' : 'IO'} | {scenario.loanTermYears}yr | {(scenario.interestRate * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-gray-900">
+                    <p className="font-semibold text-slate-900">
                       {scenario.maxBorrowingCapacity != null
                         ? `$${scenario.maxBorrowingCapacity.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
                         : 'Pending'}
                     </p>
-                    <p className="text-xs text-gray-500">{new Date(scenario.createdAt).toLocaleDateString()}</p>
+                    <p className="text-xs text-slate-500">{new Date(scenario.createdAt).toLocaleDateString()}</p>
                   </div>
                 </div>
                 {scenario.dtiRatio != null && (
-                  <div className="mt-2 flex gap-4 text-xs text-gray-500">
+                  <div className="mt-2 flex gap-4 text-xs text-slate-500 items-center">
                     <span>DTI: {scenario.dtiRatio.toFixed(2)}x</span>
                     <span>Monthly Repayment: ${scenario.monthlyRepayment?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '--'}</span>
                     {scenario.passesServiceability && scenario.passesDti ? (
@@ -235,7 +235,7 @@ export default function AdminClientDetailPage() {
           {/* Add Note Form */}
           <div className="flex gap-2">
             <textarea
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand focus:ring-2 focus:ring-brand/30 focus:outline-none resize-none"
+              className="glass-input flex-1 rounded-xl border border-white/60 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand focus:ring-2 focus:ring-brand/30 focus:outline-none resize-none"
               rows={2}
               placeholder="Add a note..."
               value={noteContent}
@@ -248,11 +248,11 @@ export default function AdminClientDetailPage() {
 
           {/* Notes List */}
           {client.notes.length > 0 ? (
-            <div className="space-y-3 border-t pt-4">
+            <div className="space-y-3 border-t border-white/40 pt-4">
               {client.notes.map((note: Note) => (
-                <div key={note.id} className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-sm text-gray-900">{note.content}</p>
-                  <div className="mt-1 flex gap-3 text-xs text-gray-500">
+                <div key={note.id} className="bg-white/50 rounded-xl p-3">
+                  <p className="text-sm text-slate-900">{note.content}</p>
+                  <div className="mt-1 flex gap-3 text-xs text-slate-500">
                     <span>{new Date(note.createdAt).toLocaleString()}</span>
                     <Badge variant="neutral">{note.visibility}</Badge>
                   </div>
@@ -260,7 +260,7 @@ export default function AdminClientDetailPage() {
               ))}
             </div>
           ) : (
-            <p className="text-gray-500 text-sm border-t pt-4">No notes yet.</p>
+            <p className="text-slate-500 text-sm border-t border-white/40 pt-4">No notes yet.</p>
           )}
         </div>
       </Card>

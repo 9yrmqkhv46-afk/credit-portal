@@ -75,8 +75,8 @@ export default function ResultsPage() {
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Borrowing Capacity Results</h1>
-          <p className="mt-1 text-gray-600">
+          <h1 className="text-2xl font-bold text-slate-900">Borrowing Capacity Results</h1>
+          <p className="mt-1 text-slate-600">
             {scenario.purpose} | {scenario.repaymentType === 'PI' ? 'Principal & Interest' : 'Interest Only'} | {scenario.loanTermYears} years
           </p>
         </div>
@@ -86,37 +86,42 @@ export default function ResultsPage() {
       </div>
 
       {/* Main Result (hero) */}
-      <Card className="text-center bg-gradient-to-b from-brand-light/60 to-white">
-        <p className="text-sm text-gray-600 uppercase tracking-wide font-medium">Maximum Borrowing Capacity</p>
-        <p className="text-4xl font-bold text-brand mt-2">
-          {formatCurrency(scenario.maxBorrowingCapacity)}
-        </p>
-        <div className="mt-4">
-          {passesAll ? (
-            <Badge variant="success">Passes All Checks</Badge>
-          ) : (
-            <Badge variant="danger">Capacity Limited</Badge>
-          )}
+      <div className="relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-brand to-brand-dark p-8 text-center shadow-2xl shadow-brand/30">
+        <div className="glass-blob" style={{ top: '-6rem', right: '-4rem', width: '18rem', height: '18rem', background: 'rgba(45, 212, 191, 0.35)' }} />
+        <div className="relative">
+          <p className="text-sm uppercase tracking-widest font-semibold text-emerald-100">Maximum Borrowing Capacity</p>
+          <p className="mt-3 text-5xl sm:text-6xl font-bold text-white drop-shadow-sm">
+            {formatCurrency(scenario.maxBorrowingCapacity)}
+          </p>
+          <div className="mt-5">
+            {passesAll ? (
+              <Badge variant="success">Passes All Checks</Badge>
+            ) : (
+              <Badge variant="danger">Capacity Limited</Badge>
+            )}
+          </div>
         </div>
-      </Card>
+      </div>
 
       {/* Estimated Repayments (CommBank-style, at actual rate) */}
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Estimated Repayments</h3>
-            <p className="text-sm text-gray-500">At your {actualRatePct}% rate over {scenario.loanTermYears} years</p>
+            <h3 className="text-lg font-semibold text-slate-900">Estimated Repayments</h3>
+            <p className="text-sm text-slate-500">At your {actualRatePct}% rate over {scenario.loanTermYears} years</p>
           </div>
-          {/* Frequency toggle */}
-          <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+          {/* Frequency toggle — frosted segmented control */}
+          <div className="inline-flex rounded-xl border border-white/60 bg-white/40 p-1 backdrop-blur-md shadow-sm">
             {FREQUENCY_TABS.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setFrequency(tab.key)}
                 className={[
-                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                  frequency === tab.key ? 'bg-brand text-white shadow-sm' : 'text-gray-600 hover:text-gray-900',
+                  'rounded-lg px-4 py-1.5 text-sm font-medium transition',
+                  frequency === tab.key
+                    ? 'bg-gradient-to-br from-brand to-brand-dark text-white shadow-md'
+                    : 'text-slate-600 hover:text-slate-900',
                 ].join(' ')}
               >
                 {tab.label}
@@ -126,25 +131,25 @@ export default function ResultsPage() {
         </div>
 
         <div className="mt-5 flex items-baseline gap-2">
-          <span className="text-4xl font-bold text-gray-900">{formatCurrency(selectedRepayment)}</span>
-          <span className="text-sm text-gray-500">/ {frequency}</span>
+          <span className="text-4xl font-bold text-brand">{formatCurrency(selectedRepayment)}</span>
+          <span className="text-sm text-slate-500">/ {frequency}</span>
         </div>
 
         <dl className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-4">
-            <dt className="text-xs uppercase tracking-wide text-gray-500">Monthly</dt>
-            <dd className="mt-1 text-lg font-semibold text-gray-900">{formatCurrency(repayments.monthly)}</dd>
+          <div className="rounded-xl border border-white/50 bg-white/40 p-4">
+            <dt className="text-xs uppercase tracking-wide text-slate-500">Monthly</dt>
+            <dd className="mt-1 text-lg font-semibold text-slate-900">{formatCurrency(repayments.monthly)}</dd>
           </div>
-          <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-4">
-            <dt className="text-xs uppercase tracking-wide text-gray-500">Total Interest</dt>
-            <dd className="mt-1 text-lg font-semibold text-gray-900">{formatCurrency(repayments.totalInterest)}</dd>
+          <div className="rounded-xl border border-white/50 bg-white/40 p-4">
+            <dt className="text-xs uppercase tracking-wide text-slate-500">Total Interest</dt>
+            <dd className="mt-1 text-lg font-semibold text-slate-900">{formatCurrency(repayments.totalInterest)}</dd>
           </div>
-          <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-4">
-            <dt className="text-xs uppercase tracking-wide text-gray-500">Total Cost</dt>
-            <dd className="mt-1 text-lg font-semibold text-gray-900">{formatCurrency(repayments.totalRepayments)}</dd>
+          <div className="rounded-xl border border-white/50 bg-white/40 p-4">
+            <dt className="text-xs uppercase tracking-wide text-slate-500">Total Cost</dt>
+            <dd className="mt-1 text-lg font-semibold text-slate-900">{formatCurrency(repayments.totalRepayments)}</dd>
           </div>
         </dl>
-        <p className="mt-3 text-xs text-gray-400">
+        <p className="mt-3 text-xs text-slate-400">
           Estimate only. {scenario.repaymentType === 'PI' ? 'Principal & Interest' : 'Interest Only'} at the actual rate;
           total cost includes principal plus interest over the full term.
         </p>
@@ -191,13 +196,13 @@ export default function ResultsPage() {
       <Card title="Debt-to-Income Ratio">
         <div className="flex items-center gap-4">
           <div className="flex-1">
-            <div className="w-full bg-gray-200 rounded-full h-4">
+            <div className="w-full bg-slate-200/70 rounded-full h-4 overflow-hidden">
               <div
-                className={`h-4 rounded-full ${(scenario.dtiRatio ?? 0) <= 6 ? 'bg-green-500' : 'bg-red-500'}`}
+                className={`h-4 rounded-full transition-all ${(scenario.dtiRatio ?? 0) <= 6 ? 'bg-gradient-to-r from-emerald-400 to-emerald-600' : 'bg-gradient-to-r from-red-400 to-red-600'}`}
                 style={{ width: `${Math.min(((scenario.dtiRatio ?? 0) / 8) * 100, 100)}%` }}
               />
             </div>
-            <div className="flex justify-between mt-1 text-xs text-gray-500">
+            <div className="flex justify-between mt-1 text-xs text-slate-500">
               <span>0x</span>
               <span>6x (cap)</span>
               <span>8x</span>

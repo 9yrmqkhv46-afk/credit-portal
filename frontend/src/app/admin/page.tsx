@@ -67,8 +67,8 @@ export default function AdminDashboardPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Client Management</h1>
-          <p className="mt-1 text-gray-600">{clients.length} total clients</p>
+          <h1 className="text-2xl font-bold text-white">Client Management</h1>
+          <p className="mt-1 text-slate-300">{clients.length} total clients</p>
         </div>
         <div className="w-64">
           <Input
@@ -79,20 +79,20 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      <Card>
+      <Card variant="dark" hover={false} className="p-0 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-white/10">
+            <thead className="bg-white/5">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Scenario</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Max Borrowing</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DTI</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">Name</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">Last Scenario</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">Max Borrowing</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">DTI</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-white/10">
               {filteredClients.map((client) => {
                 const latestScenario = client.loanScenarios?.length > 0 ? client.loanScenarios[0] : null;
                 const status = client.clientProfile?.status || 'Prospect';
@@ -100,22 +100,22 @@ export default function AdminDashboardPage() {
                   <tr
                     key={client.id}
                     onClick={() => router.push(`/admin/clients/${client.id}`)}
-                    className="cursor-pointer hover:bg-gray-50 transition-colors"
+                    className="cursor-pointer hover:bg-white/10 transition-colors"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{client.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{client.email}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{client.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{client.email}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Badge variant={getStatusVariant(status)}>{status}</Badge>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                       {latestScenario ? new Date(latestScenario.createdAt).toLocaleDateString() : '--'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-white">
                       {latestScenario?.maxBorrowingCapacity != null
                         ? `$${latestScenario.maxBorrowingCapacity.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
                         : '--'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                       {latestScenario?.dtiRatio != null ? `${latestScenario.dtiRatio.toFixed(2)}x` : '--'}
                     </td>
                   </tr>
@@ -123,7 +123,7 @@ export default function AdminDashboardPage() {
               })}
               {filteredClients.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={6} className="px-6 py-8 text-center text-sm text-slate-300">
                     No clients found.
                   </td>
                 </tr>
