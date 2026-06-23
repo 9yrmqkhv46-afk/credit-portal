@@ -52,8 +52,9 @@ A full-stack borrowing power calculator and credit lending portal designed for A
 │   ├── src/
 │   │   ├── app/              # App Router pages
 │   │   │   ├── admin/        # Admin dashboard pages
+│   │   │   ├── admin-login/  # Dedicated administrator sign-in portal
 │   │   │   ├── dashboard/    # Client dashboard + calculator
-│   │   │   ├── login/        # Login page
+│   │   │   ├── login/        # Login page (unified clients + admins)
 │   │   │   └── register/     # Registration page
 │   │   ├── components/ui/    # Reusable UI components
 │   │   ├── context/          # React context (Auth)
@@ -122,9 +123,11 @@ npx prisma db push
 For production with PostgreSQL, see the [Deploy to a permanent public URL](#deploy-to-a-permanent-public-url)
 section — schema sync is handled automatically by `npm run start:prod`.
 
-### 5. Seed the Database
+### 5. Seed the Database (optional)
 
-This creates the admin user and a sample client:
+The admin and sample client are created **automatically when the backend
+starts** (see `backend/src/lib/bootstrap.ts`), so this step is optional. To
+seed manually anyway:
 
 ```bash
 cd backend
@@ -169,18 +172,27 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Default Credentials (Development)
 
-After seeding, the following accounts are available:
+The admin account is created **automatically on first startup** — no manual
+seeding required. Default admin: `support@transformbiz.com.au` / `Pavan2003$%`
+(override via `ADMIN_EMAIL` / `ADMIN_PASSWORD` env vars on the backend service).
+
+There are **two ways to sign in**: the unified `/login` (for both clients and
+admins) and a dedicated administrator portal at `/admin-login`.
+
+The following accounts are available out of the box:
 
 | Role   | Email                          | Password     |
 |--------|--------------------------------|--------------|
-| Admin  | support@transformbiz.com.au    | Pavan2003$%  |
-| Admin  | admin@lendcalc.com             | Admin123!    |
+| Admin (primary) | support@transformbiz.com.au    | Pavan2003$%  |
+| Admin (legacy)  | admin@lendcalc.com             | Admin123!    |
 | Client | client@example.com             | Client123!   |
 
-The seed is **idempotent** — re-running `npm run seed` resets the admin
-passwords and roles to the values above. The sample client's password is left
-alone on re-run (no overwrite) so a real user with the same email is not
-disrupted.
+The bootstrap is **idempotent and self-healing** — on every boot the admin
+passwords and roles are re-applied to the values above (or your `ADMIN_EMAIL` /
+`ADMIN_PASSWORD` overrides), so a missing or wrong admin password is always
+corrected. The sample client's password is left alone after first creation (no
+overwrite) so a real user with the same email is not disrupted. Running
+`npm run seed` manually still works as a fallback (e.g. on Postgres).
 
 > **Warning:** Change these credentials before deploying to any shared or production environment.
 
@@ -398,21 +410,24 @@ provisioned via Blueprint, so the database is hosted externally on
    lines marked `# >>> EDIT IF RENAMED` in `render.yaml` (`FRONTEND_URL` on backend,
    `NEXT_PUBLIC_API_URL` on frontend), commit, and push. Render auto-redeploys.
 
-8. **Seed the admin user:**
-   - In the Render dashboard, open the `transformbiz-backend` service -> **Shell** tab
-   - Run: `npm run seed`
-   - This creates the admin accounts and a sample client (see [Default Credentials](#default-credentials-development)).
+8. **Admin login works immediately — no manual seeding required.**
+   The admin account is created automatically on first startup. Default admin:
+   `support@transformbiz.com.au` / `Pavan2003$%` (override via `ADMIN_EMAIL` /
+   `ADMIN_PASSWORD` env vars on the backend service). A sample client is also
+   provisioned so the admin dashboard isn't empty. Just visit your frontend URL
+   and sign in (see [Default Credentials](#default-credentials-development)).
 
 ### Login on Render after first deploy
 
-A common "I cannot log in as admin" symptom on a fresh Render deploy is that
-the database has never been seeded. The fix is:
+The admin account is created automatically on first startup — **no manual
+seeding required**. Default admin: `support@transformbiz.com.au` / `Pavan2003$%`
+(override via `ADMIN_EMAIL` / `ADMIN_PASSWORD` env vars on the backend service).
 
-1. In the Render dashboard, open the **transformbiz-backend** service.
-2. Click the **Shell** tab.
-3. Run `npm run seed`.
-4. Visit your frontend URL and log in with the credentials in
-   [Default Credentials](#default-credentials-development).
+There are two ways to sign in: the unified `/login` (clients and admins) and a
+dedicated administrator portal at `/admin-login`.
+
+Simply visit your frontend URL and log in with the credentials in
+[Default Credentials](#default-credentials-development).
 
    **Change these credentials immediately on any public deployment.**
 
@@ -486,11 +501,13 @@ Private - All rights reserved.
 This project favours pragmatic, defence-in-depth defaults over a single
 "silver-bullet" control. Implemented protections:
 
-- **Unified single login page + backend RBAC.** Both clients and admins sign in
-  at `/login`. After authentication the JWT's `role` claim is checked by the
-  Express `authorize()` middleware on every admin route, so URL-knowledge alone
-  never grants admin access. There is intentionally no separate `/admin/login`
-  route.
+- **Two sign-in entry points + backend RBAC.** Clients and admins can both sign
+  in at the unified `/login`; there is also a dedicated administrator portal at
+  `/admin-login` for convenience. Either way, after authentication the JWT's
+  `role` claim is checked by the Express `authorize()` middleware on every admin
+  route, so URL-knowledge alone never grants admin access. The `/admin-login`
+  page only redirects to `/admin` when the authenticated user's role is `ADMIN`;
+  otherwise it clears the session and shows an authorization error.
 - **Password policy on registration.** New accounts must pick a password
   >= 10 characters with upper, lower, digit, and special character. Existing
   users are exempt so legacy passwords still log in.
@@ -505,8 +522,8 @@ This project favours pragmatic, defence-in-depth defaults over a single
   `Invalid credentials.` response whether the email is unknown or the password
   is wrong, preventing account enumeration.
 - **No public admin self-signup.** `/api/auth/register` hardcodes
-  `role: 'CLIENT'`. Admin accounts are provisioned **only** via
-  `npm run seed`.
+  `role: 'CLIENT'`. Admin accounts are provisioned **only** on server startup
+  (`backend/src/lib/bootstrap.ts`) or via the manual `npm run seed` fallback.
 - **HTTP hardening headers** (via Helmet): strict Content-Security-Policy with
   `frame-ancestors 'none'`, `Referrer-Policy: no-referrer`, HSTS for 180 days
   with `includeSubDomains`, plus all helmet defaults. `X-Powered-By` is also

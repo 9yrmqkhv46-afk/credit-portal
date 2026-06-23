@@ -6,8 +6,13 @@ import authRoutes from './routes/auth';
 import clientRoutes from './routes/client';
 import scenarioRoutes from './routes/scenarios';
 import adminRoutes from './routes/admin';
+import { ensureSeedData } from './lib/bootstrap';
 
 const app = express();
+
+// Auto-provision admin accounts + sample data on startup unless explicitly
+// disabled. Default ON; set AUTO_SEED=false to skip.
+const AUTO_SEED = process.env.AUTO_SEED !== 'false';
 
 // ---------------------------------------------------------------------------
 // Security middleware
@@ -100,9 +105,21 @@ app.get('/api/health', (_req, res) => {
 
 // Start server
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(config.port, () => {
-    console.log(`Server running on port ${config.port}`);
-  });
+  const startListening = () => {
+    app.listen(config.port, () => {
+      console.log(`Server running on port ${config.port}`);
+    });
+  };
+
+  if (AUTO_SEED) {
+    // Auto-provision admins/sample data, but ALWAYS start the server even if
+    // seeding fails so the API stays available.
+    ensureSeedData()
+      .catch((err) => console.error('[bootstrap] seed error:', err))
+      .finally(() => startListening());
+  } else {
+    startListening();
+  }
 }
 
 export default app;

@@ -13,7 +13,10 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <Logo width={180} />
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
+            <Link href="/admin-login" className="text-sm text-gray-500 hover:text-gray-700 font-medium">
+              Admin
+            </Link>
             <Link href="/login">
               <Button variant="ghost">Login</Button>
             </Link>

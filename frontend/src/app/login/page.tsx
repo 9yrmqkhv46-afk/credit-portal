@@ -94,6 +94,13 @@ export default function LoginPage() {
             Admin and client accounts use the same sign-in.
           </p>
         </div>
+
+        <p className="mt-6 text-center text-sm text-gray-600">
+          Administrator?{' '}
+          <Link href="/admin-login" className="text-blue-600 hover:text-blue-700 font-medium">
+            Sign in here
+          </Link>
+        </p>
       </div>
     </div>
   );

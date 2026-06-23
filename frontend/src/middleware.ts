@@ -3,6 +3,15 @@ import { NextRequest, NextResponse } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // The dedicated admin login portal is a PUBLIC page. The route matcher below
+  // ('/admin/:path*') does not match '/admin-login', so this code normally
+  // won't even run for it — but the checks below use startsWith('/admin'),
+  // which would treat '/admin-login' as protected if it ever did. Guard
+  // explicitly so the admin sign-in page is always reachable without a token.
+  if (pathname === '/admin-login') {
+    return NextResponse.next();
+  }
+
   // Check for token in cookies (set during login for middleware access)
   const token = request.cookies.get('token')?.value;
 
