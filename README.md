@@ -364,52 +364,44 @@ Production database scripts (in `backend/package.json`):
 ## Deploy to a permanent public URL
 
 You will get a permanent `https://*.onrender.com` URL. The repo includes a
-[`render.yaml`](./render.yaml) blueprint that provisions **everything** (database
-+ backend + frontend) in one step.
+[`render.yaml`](./render.yaml) blueprint that provisions the backend and
+frontend web services. On the free Render tier, managed PostgreSQL is **not**
+provisioned via Blueprint, so the database is hosted externally on
+[Neon](https://neon.tech)'s permanent free tier.
 
-### Option A - Render one-click Blueprint (recommended)
+### Free-tier deploy (recommended for free Render accounts)
 
-1. **Push this repository to GitHub** (if it isn't already):
-   ```bash
-   git add .
-   git commit -m "Add deployment configuration"
-   git push origin main
-   ```
-2. Go to **https://render.com** and **sign in** (sign up with GitHub for the fastest path).
-3. Click **New +** -> **Blueprint**.
-4. **Connect this repository.** Render scans the repo, finds `render.yaml`, and shows the
-   three resources it will create:
-   - `transformbiz-db` - managed PostgreSQL database
-   - `transformbiz-backend` - Express API web service
-   - `transformbiz-frontend` - Next.js web service
-5. Click **Apply** / **Deploy**. Render then automatically:
-   - creates the PostgreSQL database and injects its connection string into
-     `DATABASE_URL` on the backend,
-   - **auto-generates** a strong `JWT_SECRET`,
-   - builds the backend (`npm install && npm run build:prod`) and starts it with
-     `npm run start:prod`, which runs `prisma db push` against Postgres then boots the API,
-   - builds and starts the frontend.
-6. When the services go live, your **permanent URLs** are:
+1. **Create a free PostgreSQL database on Neon**
+   - Sign up at https://neon.tech (GitHub sign-in is fastest)
+   - Create a new project (any region near you)
+   - In the dashboard, copy the "Connection string" labeled "Pooled connection" — it looks like:
+     `postgresql://USER:PASSWORD@ep-xxx-pooler.region.aws.neon.tech/dbname?sslmode=require`
+   - Keep this tab open; you'll paste it into Render in step 4.
+
+2. **Push this repo to GitHub** (already done if you're reading this on Render).
+
+3. On **https://render.com** sign in with GitHub and click **"New +"** -> **"Blueprint"**.
+   - Select the `credit-portal` repository.
+   - Render will read `render.yaml` and show two web services: `transformbiz-backend` and `transformbiz-frontend`.
+
+4. **Render will prompt for the `DATABASE_URL` value on the backend service.**
+   - Paste the Neon connection string from step 1.
+   - `JWT_SECRET` is auto-generated. `FRONTEND_URL` defaults to `https://transformbiz-frontend.onrender.com`.
+
+5. Click **"Apply"**. Render builds and deploys both services. First build takes 3-5 minutes.
+
+6. **Permanent URLs:**
    - Frontend: `https://transformbiz-frontend.onrender.com`
-   - Backend:  `https://transformbiz-backend.onrender.com` (health check at `/api/health`)
-7. **Verify the cross-service URLs.** `render.yaml` pre-sets, assuming Render's
-   default `<name>.onrender.com` domains:
-   - backend `FRONTEND_URL` = `https://transformbiz-frontend.onrender.com` (CORS allow-list)
-   - frontend `NEXT_PUBLIC_API_URL` = `https://transformbiz-backend.onrender.com/api`
+   - Backend:  `https://transformbiz-backend.onrender.com` (health: `/api/health`)
 
-   If Render assigned different names, edit those two values in `render.yaml`
-   (search for `# >>> EDIT IF RENAMED`), commit, and push — Render redeploys automatically.
-   > Note: because `NEXT_PUBLIC_API_URL` is inlined into the frontend at build time,
-   > the frontend must be **rebuilt** after changing it.
-8. **Seed default users (required for first login).** In the Render dashboard open the
-   `transformbiz-backend` service -> **Shell**, and run:
-   ```bash
-   npm run seed
-   ```
-   This creates the admin and sample client accounts listed under
-   [Default Credentials](#default-credentials-development). The seed is
-   **idempotent** — re-run it any time to reset the admin passwords (useful if
-   you suspect the deployed DB is out of sync with the docs).
+7. **If Render assigned different service names due to a collision**, edit the two
+   lines marked `# >>> EDIT IF RENAMED` in `render.yaml` (`FRONTEND_URL` on backend,
+   `NEXT_PUBLIC_API_URL` on frontend), commit, and push. Render auto-redeploys.
+
+8. **Seed the admin user:**
+   - In the Render dashboard, open the `transformbiz-backend` service -> **Shell** tab
+   - Run: `npm run seed`
+   - This creates the admin accounts and a sample client (see [Default Credentials](#default-credentials-development)).
 
 ### Login on Render after first deploy
 
@@ -424,9 +416,7 @@ the database has never been seeded. The fix is:
 
    **Change these credentials immediately on any public deployment.**
 
-Open the frontend URL — your app is now live on a permanent public URL.
-
-### Option B - Vercel (frontend) + Render (backend + database)
+### Vercel (frontend) + Render (backend + database) — *If you have a paid Render account or prefer Vercel*
 
 Use this if you prefer Vercel's CDN/edge for the Next.js frontend.
 
@@ -459,7 +449,7 @@ Use this if you prefer Vercel's CDN/edge for the Next.js frontend.
 - Deploy. Copy the resulting Vercel URL and make sure it matches the backend's
   `FRONTEND_URL` (update on Render and redeploy the backend if needed, so CORS allows it).
 
-### Option C - Docker (any container host)
+### Docker (any container host) — *If you have a paid Render account or prefer container hosting*
 
 Dockerfiles are provided for both services.
 
@@ -482,10 +472,10 @@ docker run -p 3000:3000 transformbiz-frontend
 ### Managed PostgreSQL alternatives
 
 Any standard PostgreSQL works — just set `DATABASE_URL`:
-- [Render Postgres](https://render.com) (used by the blueprint)
-- [Neon](https://neon.tech) (free tier)
+- [Neon](https://neon.tech) (permanent free tier — used by the blueprint above)
 - [Supabase](https://supabase.com) (free tier)
 - [Railway](https://railway.app)
+- [Render Postgres](https://render.com) (paid only; not available on free Render accounts)
 
 ## License
 
