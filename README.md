@@ -171,10 +171,16 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 After seeding, the following accounts are available:
 
-| Role   | Email                  | Password    |
-|--------|------------------------|-------------|
-| Admin  | admin@lendcalc.com     | Admin123!   |
-| Client | client@example.com     | Client123!  |
+| Role   | Email                          | Password     |
+|--------|--------------------------------|--------------|
+| Admin  | support@transformbiz.com.au    | Pavan2003$%  |
+| Admin  | admin@lendcalc.com             | Admin123!    |
+| Client | client@example.com             | Client123!   |
+
+The seed is **idempotent** — re-running `npm run seed` resets the admin
+passwords and roles to the values above. The sample client's password is left
+alone on re-run (no overwrite) so a real user with the same email is not
+disrupted.
 
 > **Warning:** Change these credentials before deploying to any shared or production environment.
 
@@ -395,12 +401,27 @@ You will get a permanent `https://*.onrender.com` URL. The repo includes a
    (search for `# >>> EDIT IF RENAMED`), commit, and push — Render redeploys automatically.
    > Note: because `NEXT_PUBLIC_API_URL` is inlined into the frontend at build time,
    > the frontend must be **rebuilt** after changing it.
-8. **(Optional) Seed default users.** In the Render dashboard open the
+8. **Seed default users (required for first login).** In the Render dashboard open the
    `transformbiz-backend` service -> **Shell**, and run:
    ```bash
    npm run seed
    ```
-   This creates `admin@lendcalc.com / Admin123!` and `client@example.com / Client123!`.
+   This creates the admin and sample client accounts listed under
+   [Default Credentials](#default-credentials-development). The seed is
+   **idempotent** — re-run it any time to reset the admin passwords (useful if
+   you suspect the deployed DB is out of sync with the docs).
+
+### Login on Render after first deploy
+
+A common "I cannot log in as admin" symptom on a fresh Render deploy is that
+the database has never been seeded. The fix is:
+
+1. In the Render dashboard, open the **transformbiz-backend** service.
+2. Click the **Shell** tab.
+3. Run `npm run seed`.
+4. Visit your frontend URL and log in with the credentials in
+   [Default Credentials](#default-credentials-development).
+
    **Change these credentials immediately on any public deployment.**
 
 Open the frontend URL — your app is now live on a permanent public URL.
@@ -469,3 +490,61 @@ Any standard PostgreSQL works — just set `DATABASE_URL`:
 ## License
 
 Private - All rights reserved.
+
+## Security
+
+This project favours pragmatic, defence-in-depth defaults over a single
+"silver-bullet" control. Implemented protections:
+
+- **Unified single login page + backend RBAC.** Both clients and admins sign in
+  at `/login`. After authentication the JWT's `role` claim is checked by the
+  Express `authorize()` middleware on every admin route, so URL-knowledge alone
+  never grants admin access. There is intentionally no separate `/admin/login`
+  route.
+- **Password policy on registration.** New accounts must pick a password
+  >= 10 characters with upper, lower, digit, and special character. Existing
+  users are exempt so legacy passwords still log in.
+- **Per-account brute-force lockout.** Five failed attempts on the same email
+  within 15 minutes returns `429 Account temporarily locked...`. A successful
+  login resets the counter.
+- **IP rate limiting** on `/api/auth/login` and `/api/auth/register` — 20
+  attempts per 15 minutes per IP. Complementary to the per-account lockout
+  (one stops password spraying across accounts, the other stops hammering one
+  account from many IPs).
+- **Generic auth errors.** `/api/auth/login` returns the same
+  `Invalid credentials.` response whether the email is unknown or the password
+  is wrong, preventing account enumeration.
+- **No public admin self-signup.** `/api/auth/register` hardcodes
+  `role: 'CLIENT'`. Admin accounts are provisioned **only** via
+  `npm run seed`.
+- **HTTP hardening headers** (via Helmet): strict Content-Security-Policy with
+  `frame-ancestors 'none'`, `Referrer-Policy: no-referrer`, HSTS for 180 days
+  with `includeSubDomains`, plus all helmet defaults. `X-Powered-By` is also
+  explicitly disabled.
+- **CORS allow-list.** The API only accepts cross-origin requests from
+  `FRONTEND_URL` and only with `credentials: true`.
+- **Short-lived JWTs.** Tokens expire after 24h.
+- **Strong production JWT secret enforced.** On `NODE_ENV=production` the
+  server refuses to boot if `JWT_SECRET` is missing, matches a known dev
+  placeholder, or is shorter than 32 characters.
+- **Secure cookies on HTTPS.** The frontend sets `token` / `role` cookies
+  (used by the Next.js middleware for route gating) with `SameSite=Lax`, and
+  adds `Secure` automatically when the page is served over HTTPS. Local
+  http://localhost dev is unaffected.
+- **Bcrypt password storage.** Passwords are hashed with bcrypt (cost 10);
+  the plaintext is never stored or logged.
+- **Lightweight admin audit log.** Note creation and client status changes
+  emit single-line `[admin-audit]` JSON entries to stdout (Render captures
+  them automatically) including the actor's admin email and the target
+  client id.
+
+### Trade-off — Tokens in localStorage + cookies
+
+Today the JWT is stored in `localStorage` and mirrored into a non-HttpOnly
+cookie so the Next.js middleware can gate `/dashboard` and `/admin` routes
+before the page renders. Converting the cookie to `HttpOnly` is a future
+hardening option — it would protect the token from XSS-based exfiltration,
+but requires the backend to set `Set-Cookie` directly and rearchitecting the
+fetch layer to rely on the cookie rather than an `Authorization` header.
+Until then, the primary defence against XSS remains the strict CSP and React's
+auto-escaping of dynamic content.

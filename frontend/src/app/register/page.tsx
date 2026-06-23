@@ -7,7 +7,14 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
+import { Logo } from '@/components/ui/Logo';
 import { AxiosError } from 'axios';
+
+// Mirrors the backend policy in backend/src/routes/auth.ts.
+const STRONG_PASSWORD_REGEX =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{10,}$/;
+const STRONG_PASSWORD_MESSAGE =
+  'Password must be at least 10 characters and include uppercase, lowercase, number, and special character.';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -28,8 +35,8 @@ export default function RegisterPage() {
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (!STRONG_PASSWORD_REGEX.test(password)) {
+      setError(STRONG_PASSWORD_MESSAGE);
       return;
     }
 
@@ -41,9 +48,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(name, email, password);
-      // Set cookies for middleware
-      document.cookie = `token=${localStorage.getItem('token')}; path=/`;
-      document.cookie = `role=CLIENT; path=/`;
+      // AuthContext already sets the token+role cookies for middleware.
       router.push('/dashboard');
     } catch (err) {
       const axiosError = err as AxiosError<{ error?: string }>;
@@ -57,11 +62,8 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-slate-50 px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">TB</span>
-            </div>
-            <span className="text-xl font-bold text-gray-900">TransformBiz</span>
+          <Link href="/" className="inline-flex items-center justify-center" aria-label="TransformBiz home">
+            <Logo width={240} />
           </Link>
           <h2 className="mt-6 text-2xl font-bold text-gray-900">Create your account</h2>
           <p className="mt-2 text-sm text-gray-600">
@@ -101,7 +103,7 @@ export default function RegisterPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
+              placeholder="Min 10 chars with upper, lower, number, symbol"
               required
             />
             <Input

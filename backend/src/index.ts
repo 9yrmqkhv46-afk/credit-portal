@@ -9,15 +9,56 @@ import adminRoutes from './routes/admin';
 
 const app = express();
 
-// Middleware
-app.use(helmet());
+// ---------------------------------------------------------------------------
+// Security middleware
+// ---------------------------------------------------------------------------
+
+// Never advertise the framework version.
+app.disable('x-powered-by');
+
+// Helmet sets sensible secure defaults, then we tighten a few headers further.
+// The API never serves HTML, so a strict CSP is safe.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'"],
+        frameAncestors: ["'none'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+      },
+    },
+  })
+);
+// Don't leak referrer information to other origins.
+app.use(helmet.referrerPolicy({ policy: 'no-referrer' }));
+// 180 days HSTS. Browsers will refuse to talk to this host over plain HTTP
+// once they see this header, including subdomains.
+app.use(
+  helmet.hsts({
+    maxAge: 15552000,
+    includeSubDomains: true,
+    preload: false,
+  })
+);
+
 app.use(cors({
   origin: config.frontendUrl,
   credentials: true,
 }));
 app.use(express.json());
 
-// Simple in-memory rate limiter for auth endpoints
+// ---------------------------------------------------------------------------
+// IP-based rate limiter for auth endpoints
+// ---------------------------------------------------------------------------
+// (Per-account brute-force lockout lives in routes/auth.ts.)
+
 const rateLimitStore: Map<string, { count: number; resetTime: number }> = new Map();
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const RATE_LIMIT_MAX_REQUESTS = 20; // max attempts per window

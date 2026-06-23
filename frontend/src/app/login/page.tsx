@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
+import { Logo } from '@/components/ui/Logo';
 import { AxiosError } from 'axios';
 
 export default function LoginPage() {
@@ -29,9 +30,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const user = await login(email, password);
-      // Set cookies for middleware
-      document.cookie = `token=${localStorage.getItem('token')}; path=/`;
-      document.cookie = `role=${user.role}; path=/`;
+      // AuthContext already sets the token+role cookies (with SameSite=Lax and
+      // Secure on HTTPS). No need to set them again here.
 
       if (user.role === 'ADMIN') {
         router.push('/admin');
@@ -50,11 +50,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-slate-50 px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">TB</span>
-            </div>
-            <span className="text-xl font-bold text-gray-900">TransformBiz</span>
+          <Link href="/" className="inline-flex items-center justify-center" aria-label="TransformBiz home">
+            <Logo width={240} />
           </Link>
           <h2 className="mt-6 text-2xl font-bold text-gray-900">Sign in to your account</h2>
           <p className="mt-2 text-sm text-gray-600">
@@ -93,6 +90,9 @@ export default function LoginPage() {
               Sign In
             </Button>
           </form>
+          <p className="mt-4 text-center text-xs text-gray-500">
+            Admin and client accounts use the same sign-in.
+          </p>
         </div>
       </div>
     </div>

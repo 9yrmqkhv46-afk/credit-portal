@@ -10,6 +10,18 @@ const router = Router();
 router.use(authenticate);
 router.use(authorize('ADMIN'));
 
+/**
+ * Lightweight audit logger. Writes structured single-line JSON to stdout so
+ * hosting providers (e.g. Render) capture and index it for free. We
+ * intentionally include only non-sensitive metadata: who acted, what entity
+ * was touched, and when. Never log passwords or JWT tokens.
+ */
+function audit(event: string, fields: Record<string, unknown>): void {
+  console.info(
+    `[admin-audit] ${event} ${JSON.stringify({ ...fields, at: new Date().toISOString() })}`
+  );
+}
+
 // GET /api/admin/clients - list all clients with latest scenario metrics, status, tags
 router.get('/clients', async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -112,6 +124,14 @@ router.post('/clients/:id/notes', async (req: AuthRequest, res: Response): Promi
       },
     });
 
+    audit('note.create', {
+      adminEmail: req.user!.email,
+      adminId: req.user!.id,
+      clientId: req.params.id,
+      noteId: note.id,
+      visibility: note.visibility,
+    });
+
     res.status(201).json({ note });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -150,9 +170,18 @@ router.patch('/clients/:id/status', async (req: AuthRequest, res: Response): Pro
       return;
     }
 
+    const previousStatus = profile.status;
     const updatedProfile = await prisma.clientProfile.update({
       where: { userId: req.params.id },
       data: { status: data.status },
+    });
+
+    audit('client.status.update', {
+      adminEmail: req.user!.email,
+      adminId: req.user!.id,
+      clientId: req.params.id,
+      previousStatus,
+      newStatus: data.status,
     });
 
     res.json({ profile: updatedProfile });

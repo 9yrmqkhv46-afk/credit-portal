@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 400 100"
+     role="img"
+     aria-label="TransformBiz">
+  <title>TransformBiz</title>
+  <!--
+    Colour palette
+      Dark teal   #2C5F66  - wordmark + mark stem
+      Mid teal    #3F8A93  - mark accent
+      Cool gray   #6B7280  - folded paper highlight
+      Light gray  #9CA3AF  - subtle fold edge
+  -->
+
+  <!-- Wordmark "TransformBiz" -->
+  <text x="0" y="68"
+        fill="#2C5F66"
+        font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="48"
+        font-weight="700"
+        letter-spacing="-0.5">TransformBiz</text>
+
+  <!--
+    Stylized "folded paper T" mark to the right of the wordmark.
+    Built from rectangles + a polygon so it renders identically without web fonts.
+    All coordinates are inside the (320..396, 14..86) box.
+  -->
+  <g>
+    <!-- Outer tab / page background (light gray fold edge) -->
+    <rect x="320" y="14" width="76" height="72" rx="6" ry="6" fill="#9CA3AF" />
+    <!-- Folded-page front face (cool gray) -->
+    <polygon points="320,86 320,30 336,14 396,14 396,86" fill="#6B7280" />
+    <!-- Teal "T" crossbar -->
+    <rect x="332" y="30" width="52" height="14" fill="#3F8A93" />
+    <!-- Teal "T" stem -->
+    <rect x="352" y="30" width="12" height="42" fill="#2C5F66" />
+    <!-- Fold highlight triangle in the top-left corner of the page -->
+    <polygon points="320,30 336,30 336,14" fill="#D1D5DB" />
+  </g>
+</svg>

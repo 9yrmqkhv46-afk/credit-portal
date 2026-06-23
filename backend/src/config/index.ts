@@ -2,15 +2,45 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Any well-known/dev placeholder values that must NEVER appear in production.
+// Add to this list if more leak into version control.
+const WEAK_JWT_SECRETS = new Set<string>([
+  'dev-secret-do-not-use-in-production',
+  'dev-secret-change-in-production',
+  'changeme',
+  'secret',
+]);
+
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
+
   if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('JWT_SECRET environment variable is required in production');
+    if (isProduction) {
+      throw new Error(
+        'JWT_SECRET environment variable is required in production. ' +
+          'Generate a strong value with `openssl rand -base64 32` and set it on the host.'
+      );
     }
-    // Only allow a default in non-production (development/test) environments
+    // Only allow a default in non-production (development/test) environments.
     return 'dev-secret-do-not-use-in-production';
   }
+
+  if (isProduction && WEAK_JWT_SECRETS.has(secret)) {
+    throw new Error(
+      'JWT_SECRET is set to a known development placeholder. Refusing to start in production. ' +
+        'Generate a strong value with `openssl rand -base64 32`.'
+    );
+  }
+
+  // Defence-in-depth: 32+ bytes (~ a base64-encoded 24 raw bytes) in production.
+  if (isProduction && secret.length < 32) {
+    throw new Error(
+      'JWT_SECRET is too short for production (must be at least 32 characters). ' +
+        'Generate a strong value with `openssl rand -base64 32`.'
+    );
+  }
+
   return secret;
 }
 

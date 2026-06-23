@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { Spinner } from '@/components/ui/Spinner';
 import { Button } from '@/components/ui/Button';
+import { Logo } from '@/components/ui/Logo';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
@@ -31,11 +32,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center gap-8">
-              <Link href="/dashboard" className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">TB</span>
-                </div>
-                <span className="text-lg font-bold text-gray-900">TransformBiz</span>
+              <Link href="/dashboard" className="flex items-center gap-2" aria-label="TransformBiz home">
+                <Logo width={160} />
               </Link>
               <div className="hidden sm:flex items-center gap-4">
                 <Link href="/dashboard" className="text-sm font-medium text-gray-700 hover:text-blue-600">

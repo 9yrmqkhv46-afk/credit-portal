@@ -16,11 +16,17 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function setCookie(name: string, value: string, days: number = 1) {
   const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
-  document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
+  // Only attach `Secure` on real HTTPS pages. Adding it on http://localhost
+  // would cause browsers to silently drop the cookie and break dev.
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  const secureFlag = isHttps ? '; Secure' : '';
+  document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=Lax${secureFlag}`;
 }
 
 function removeCookie(name: string) {
-  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax`;
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  const secureFlag = isHttps ? '; Secure' : '';
+  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax${secureFlag}`;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

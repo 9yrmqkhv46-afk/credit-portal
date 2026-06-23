@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { Spinner } from '@/components/ui/Spinner';
 import { Button } from '@/components/ui/Button';
+import { Logo } from '@/components/ui/Logo';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
@@ -31,11 +32,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center gap-8">
-              <Link href="/admin" className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">TB</span>
-                </div>
-                <span className="text-lg font-bold text-white">TransformBiz Admin</span>
+              <Link href="/admin" className="flex items-center gap-3" aria-label="TransformBiz Admin home">
+                <span className="inline-flex items-center bg-white rounded px-2 py-1">
+                  <Logo width={140} />
+                </span>
+                <span className="text-sm font-semibold text-white tracking-wide uppercase">Admin</span>
               </Link>
               <div className="hidden sm:flex items-center gap-4">
                 <Link href="/admin" className="text-sm font-medium text-gray-300 hover:text-white">

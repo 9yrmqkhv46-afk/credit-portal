@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
+import { Logo } from '@/components/ui/Logo';
 
 export default function LandingPage() {
   return (
@@ -10,10 +11,7 @@ export default function LandingPage() {
       <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">TB</span>
-            </div>
-            <h1 className="text-xl font-bold text-gray-900">TransformBiz</h1>
+            <Logo width={180} />
           </div>
           <div className="flex gap-3">
             <Link href="/login">
