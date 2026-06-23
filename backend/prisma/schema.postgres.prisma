@@ -1,0 +1,177 @@
+// Production Prisma schema (PostgreSQL).
+//
+// This schema is identical in shape to ./schema.prisma but targets PostgreSQL,
+// which is the recommended database for production deployments.
+//
+// Local development uses ./schema.prisma (SQLite) so no database server is
+// required. Production (Render, Vercel+Render, Docker, etc.) uses THIS file.
+//
+// Usage in production (handled automatically by render.yaml / Dockerfile):
+//   npx prisma generate --schema=prisma/schema.postgres.prisma
+//   npx prisma migrate deploy --schema=prisma/schema.postgres.prisma
+//
+// Keep both schemas in sync when changing models.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Role: CLIENT | ADMIN
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      String   @default("CLIENT")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clientProfile ClientProfile?
+  loanScenarios LoanScenario[]
+  notes         Note[]
+}
+
+// ResidencyStatus: CITIZEN | PERMANENT_RESIDENT | TEMPORARY_VISA
+// MaritalStatus: SINGLE | MARRIED | DE_FACTO | DIVORCED | WIDOWED
+// EmploymentStatus: FULL_TIME | PART_TIME | CASUAL | SELF_EMPLOYED | UNEMPLOYED | RETIRED
+model ClientProfile {
+  id                       String   @id @default(uuid())
+  userId                   String   @unique
+  user                     User     @relation(fields: [userId], references: [id])
+  phone                    String?
+  address                  String?
+  dateOfBirth              DateTime?
+  residencyStatus          String   @default("CITIZEN")
+  numberOfAdultDependants  Int      @default(0)
+  numberOfChildDependants  Int      @default(0)
+  privateSchoolingFlag     Boolean  @default(false)
+  maritalStatus            String   @default("SINGLE")
+  employmentStatus         String   @default("FULL_TIME")
+  status                   String   @default("Prospect")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  incomeSources  IncomeSource[]
+  existingDebts  ExistingDebt[]
+  properties     Property[]
+  expenseSummary ExpenseSummary?
+}
+
+// Owner: SELF | PARTNER
+// Type: SALARY | BONUS | COMMISSION | RENTAL | INVESTMENT | GOVERNMENT | OTHER
+// Frequency: WEEKLY | FORTNIGHTLY | MONTHLY | ANNUAL
+model IncomeSource {
+  id              String   @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+  owner           String   @default("SELF")
+  type            String
+  amount          Float
+  frequency       String
+  description     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Type: HOME_LOAN | PERSONAL_LOAN | CAR_LOAN | CREDIT_CARD | HECS | OTHER
+model ExistingDebt {
+  id              String   @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+  type            String
+  outstandingBalance Float
+  monthlyRepayment   Float?
+  interestRate       Float?
+  creditLimit        Float?
+  description        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// Type: OWNER_OCCUPIED | INVESTMENT | RENTAL
+model Property {
+  id              String   @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+  type            String
+  address         String
+  estimatedValue  Float
+  mortgageBalance Float?
+  rentalIncome    Float?
+  description     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Frequency: WEEKLY | FORTNIGHTLY | MONTHLY | ANNUAL
+model ExpenseSummary {
+  id              String   @id @default(uuid())
+  clientProfileId String   @unique
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+
+  groceries         Float   @default(0)
+  groceriesFreq     String  @default("MONTHLY")
+  utilities         Float   @default(0)
+  utilitiesFreq     String  @default("MONTHLY")
+  transport         Float   @default(0)
+  transportFreq     String  @default("MONTHLY")
+  insurance         Float   @default(0)
+  insuranceFreq     String  @default("MONTHLY")
+  education         Float   @default(0)
+  educationFreq     String  @default("MONTHLY")
+  childcare         Float   @default(0)
+  childcareFreq     String  @default("MONTHLY")
+  entertainment     Float   @default(0)
+  entertainmentFreq String  @default("MONTHLY")
+  otherExpenses     Float   @default(0)
+  otherExpensesFreq String  @default("MONTHLY")
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// Purpose: PURCHASE | REFINANCE | INVESTMENT | CONSTRUCTION | EQUITY_RELEASE
+// RepaymentType: PI (Principal & Interest) | IO (Interest Only)
+model LoanScenario {
+  id                    String   @id @default(uuid())
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id])
+
+  purpose               String
+  repaymentType         String   @default("PI")
+  loanTermYears         Int      @default(30)
+  interestRate          Float
+
+  // Calculated results
+  maxBorrowingCapacity  Float?
+  serviceabilityMax     Float?
+  dtiMax                Float?
+  monthlyRepayment      Float?
+  totalMonthlyIncome    Float?
+  totalMonthlyExpenses  Float?
+  netMonthlySurplus     Float?
+  dtiRatio              Float?
+  passesServiceability  Boolean?
+  passesDti             Boolean?
+  messages              String?
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+// Visibility: ADMIN_ONLY | CLIENT_VISIBLE
+model Note {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  content    String
+  visibility String   @default("ADMIN_ONLY")
+  authorId   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
