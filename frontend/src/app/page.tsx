@@ -40,15 +40,15 @@ export default function LandingPage() {
       {/* Header */}
       <header className="glass-nav-dark sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2 rounded-xl bg-white/90 px-3 py-1.5 shadow-sm">
+          <div className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-1.5 shadow-sm">
             <Logo width={170} />
           </div>
           <div className="flex gap-2 sm:gap-3 items-center">
-            <Link href="/admin-login" className="text-sm text-slate-200 hover:text-white font-medium px-2">
+            <Link href="/admin-login" className="text-sm text-secondary hover:text-white font-medium px-2">
               Admin
             </Link>
             <Link href="/login">
-              <Button variant="ghost" className="text-slate-100 hover:bg-white/10">Login</Button>
+              <Button variant="ghost" className="text-secondary hover:bg-white/10">Login</Button>
             </Link>
             <Link href="/register">
               <Button variant="primary">Get Started</Button>
@@ -69,7 +69,7 @@ export default function LandingPage() {
               Borrowing Power
             </span>
           </h1>
-          <p className="mt-6 text-lg text-slate-200 leading-relaxed">
+          <p className="mt-6 text-lg text-secondary leading-relaxed">
             Complete your financial profile, run loan scenarios, and get instant results with detailed
             CommBank-style repayment breakdowns — all in one secure, beautifully simple portal.
           </p>
@@ -96,7 +96,7 @@ export default function LandingPage() {
                 </svg>
               </div>
               <h3 className="text-lg font-semibold text-white">{f.title}</h3>
-              <p className="mt-2 text-slate-200/90 text-sm leading-relaxed">{f.body}</p>
+              <p className="mt-2 text-secondary/90 text-sm leading-relaxed">{f.body}</p>
             </div>
           ))}
         </div>
@@ -104,7 +104,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-white/10 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-sm text-slate-300">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-sm text-secondary">
           <p>TransformBiz Credit Lenders Portal — Professional Borrowing Capacity Calculator</p>
         </div>
       </footer>

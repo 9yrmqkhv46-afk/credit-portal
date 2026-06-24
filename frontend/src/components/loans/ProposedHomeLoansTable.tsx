@@ -95,26 +95,26 @@ export function ProposedHomeLoansTable({ readOnly = false, initialLoans }: Props
     catch { setError('Failed to delete proposed loan.'); }
   }
 
-  if (loading) return <p className="text-sm text-slate-500">Loading proposed loans…</p>;
+  if (loading) return <p className="text-sm text-muted">Loading proposed loans…</p>;
 
   return (
     <div className="space-y-4">
       {error && <Alert variant="error">{error}</Alert>}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm font-medium text-slate-700">
+        <p className="text-sm font-medium text-secondary">
           {items.length} proposed loan{items.length === 1 ? '' : 's'}
-          <span className="ml-2 text-xs text-slate-500">(the first included loan is assessed by the calculator)</span>
+          <span className="ml-2 text-xs text-muted">(the first included loan is assessed by the calculator)</span>
         </p>
         {!readOnly && <Button size="sm" onClick={openAdd}>+ Add proposed loan</Button>}
       </div>
       {!readOnly && (
-        <p className="text-xs text-slate-500">Tick a loan to include it; the first ticked loan is assessed by the borrowing calculation.</p>
+        <p className="text-xs text-muted">Tick a loan to include it; the first ticked loan is assessed by the borrowing calculation.</p>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-white/50 bg-white/40 backdrop-blur-sm">
+      <div className="overflow-x-auto rounded-xl border border-white/12 bg-white/5 backdrop-blur-sm">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b border-white/60 text-left text-xs uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-white/15 text-left text-xs uppercase tracking-wide text-muted">
               <th className="px-3 py-2">#</th>
               <th className="px-3 py-2">Product type</th>
               <th className="px-3 py-2">Investment</th>
@@ -132,7 +132,7 @@ export function ProposedHomeLoansTable({ readOnly = false, initialLoans }: Props
           </thead>
           <tbody>
             {items.map((l, idx) => (
-              <tr key={l.id} className="row-hover border-b border-white/30 text-slate-800">
+              <tr key={l.id} className="row-hover border-b border-white/30 text-primary">
                 <td className="px-3 py-2">{idx + 1}</td>
                 <td className="px-3 py-2">{l.productType || '—'}</td>
                 <td className="px-3 py-2">{l.investmentFlag ? 'Yes' : 'No'}</td>
@@ -158,13 +158,13 @@ export function ProposedHomeLoansTable({ readOnly = false, initialLoans }: Props
                 {!readOnly && (
                   <td className="px-3 py-2 whitespace-nowrap">
                     <button onClick={() => openEdit(l)} className="mr-2 text-xs font-medium text-brand hover:underline">Edit</button>
-                    <button onClick={() => remove(l)} className="text-xs font-medium text-red-600 hover:underline">Delete</button>
+                    <button onClick={() => remove(l)} className="text-xs font-medium text-crimson hover:underline">Delete</button>
                   </td>
                 )}
               </tr>
             ))}
             {items.length === 0 && (
-              <tr><td colSpan={readOnly ? 12 : 13} className="px-3 py-6 text-center text-sm text-slate-500">No proposed loans.</td></tr>
+              <tr><td colSpan={readOnly ? 12 : 13} className="px-3 py-6 text-center text-sm text-muted">No proposed loans.</td></tr>
             )}
           </tbody>
         </table>
@@ -192,15 +192,15 @@ export function ProposedHomeLoansTable({ readOnly = false, initialLoans }: Props
               <Input label="Ownership" value={editing.ownership || ''} onChange={(e) => setEditing({ ...editing, ownership: e.target.value })} />
             </div>
             <div className="flex gap-6">
-              <label className="flex items-center gap-2 text-sm text-slate-700">
+              <label className="flex items-center gap-2 text-sm text-secondary">
                 <input type="checkbox" checked={!!editing.investmentFlag} onChange={(e) => setEditing({ ...editing, investmentFlag: e.target.checked })}
                   className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" /> Investment
               </label>
-              <label className="flex items-center gap-2 text-sm text-slate-700">
+              <label className="flex items-center gap-2 text-sm text-secondary">
                 <input type="checkbox" checked={!!editing.overrideRate} onChange={(e) => setEditing({ ...editing, overrideRate: e.target.checked })}
                   className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" /> Override rate
               </label>
-              <label className="flex items-center gap-2 text-sm text-slate-700">
+              <label className="flex items-center gap-2 text-sm text-secondary">
                 <input type="checkbox" checked={editing.includeInServicing !== false} onChange={(e) => setEditing({ ...editing, includeInServicing: e.target.checked })}
                   className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" /> Assess this loan
               </label>

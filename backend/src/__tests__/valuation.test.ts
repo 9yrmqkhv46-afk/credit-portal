@@ -205,4 +205,67 @@ describe('Apify connector', () => {
     expect(r.configured).toBe(true);
     expect(r.error).toMatch(/HTTP 429/);
   });
+
+  test('defaults to the realestate-au actor when APIFY_ACTOR_ID is unset', async () => {
+    process.env.APIFY_TOKEN = 'apify-token';
+    delete process.env.APIFY_ACTOR_ID;
+    delete process.env.APIFY_TASK_ID;
+    const fetchMock = mockFetchOnce(200, [{ price: 950000 }]);
+
+    const r = await getApifyEstimate({ address: '12 Smith St', postcode: '2026' });
+    expect(r.configured).toBe(true);
+    expect(r.estimatedValue).toBe(950000);
+
+    const [calledUrl] = fetchMock.mock.calls[0] as [string];
+    // Default actor id `abotapi~realestate-au-scraper` is URL-encoded into the path.
+    expect(calledUrl).toContain('api.apify.com/v2/acts/');
+    expect(calledUrl).toContain(encodeURIComponent('abotapi~realestate-au-scraper'));
+  });
+
+  test('builds a flexible input with searchUrl + startUrls', async () => {
+    process.env.APIFY_TOKEN = 'apify-token';
+    process.env.APIFY_ACTOR_ID = 'me~my-actor';
+    const fetchMock = mockFetchOnce(200, [{ priceEstimate: 1010000, rentEstimate: 720 }]);
+
+    const r = await getApifyEstimate({ address: '12 Smith St', postcode: '2026' });
+    // priceEstimate / rentEstimate are mapped defensively.
+    expect(r.estimatedValue).toBe(1010000);
+    expect(r.rentalEstimateWeekly).toBe(720);
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body));
+    expect(typeof body.searchUrl).toBe('string');
+    expect(body.searchUrl).toContain('realestate.com.au');
+    expect(Array.isArray(body.startUrls)).toBe(true);
+    expect(body.startUrls[0].url).toContain('realestate.com.au');
+  });
+
+  test('async run mode starts a run, polls, then reads the dataset', async () => {
+    process.env.APIFY_TOKEN = 'apify-token';
+    process.env.APIFY_ACTOR_ID = 'me~my-actor';
+    process.env.APIFY_RUN_MODE = 'async';
+
+    const fn = jest
+      .fn()
+      // 1) start run
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { id: 'run1', defaultDatasetId: 'ds1' } }) })
+      // 2) poll status -> SUCCEEDED
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { status: 'SUCCEEDED', defaultDatasetId: 'ds1' } }) })
+      // 3) dataset items
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [{ estimatedValue: 880000, rentPerWeek: 640 }] });
+    (global as unknown as { fetch: jest.Mock }).fetch = fn;
+
+    const r = await getApifyEstimate({ address: '9 Ocean Rd', postcode: '2099' });
+    expect(r.configured).toBe(true);
+    expect(r.estimatedValue).toBe(880000);
+    expect(r.rentalEstimateWeekly).toBe(640);
+
+    const [startUrl, startInit] = fn.mock.calls[0] as [string, RequestInit];
+    expect(startUrl).toContain('/runs?token=apify-token');
+    expect(startInit.method).toBe('POST');
+    const [pollUrl] = fn.mock.calls[1] as [string];
+    expect(pollUrl).toContain('actor-runs/run1');
+    const [itemsUrl] = fn.mock.calls[2] as [string];
+    expect(itemsUrl).toContain('datasets/ds1/items');
+  });
 });

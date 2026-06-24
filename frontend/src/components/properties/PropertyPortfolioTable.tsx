@@ -98,11 +98,11 @@ function GrowthBar({ purchase, current }: { purchase: number | null | undefined;
   }, [targetFill]);
 
   if (ratio === null) {
-    return <div className="h-2 w-full rounded-full bg-slate-200" aria-hidden="true" />;
+    return <div className="h-2 w-full rounded-full bg-white/10" aria-hidden="true" />;
   }
   const color = growthPct >= 10 ? 'bg-emerald-500' : growthPct >= 0 ? 'bg-amber-500' : 'bg-red-500';
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200" role="img"
+    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10" role="img"
       aria-label={`Growth ${growthPct.toFixed(1)} percent`}>
       <div className={`bar-fill h-full ${color}`} style={{ width: `${fill}%` }} />
     </div>
@@ -335,7 +335,7 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
     }
   }
 
-  if (loading) return <p className="text-sm text-slate-500">Loading properties…</p>;
+  if (loading) return <p className="text-sm text-muted">Loading properties…</p>;
 
   return (
     <div className="space-y-4">
@@ -343,16 +343,16 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
 
       {/* Summary + actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm font-medium text-slate-700">
+        <p className="text-sm font-medium text-secondary">
           {properties.length} propert{properties.length === 1 ? 'y' : 'ies'} total,{' '}
           <span className="text-brand">{includedCount} included in servicing</span>
         </p>
         {!readOnly && (
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1">
-              <span className="text-xs text-slate-500">Rate %</span>
+              <span className="text-xs text-muted">Rate %</span>
               <input type="number" step="0.1" value={ratePct} onChange={(e) => setRatePct(e.target.value)}
-                className="glass-input w-16 rounded-lg border border-white/60 px-2 py-1 text-sm" />
+                className="glass-input w-16 rounded-lg border border-white/15 px-2 py-1 text-sm" />
             </div>
             <Button variant="secondary" size="sm" onClick={handleRecalc} loading={recalcing}>
               Recalculate borrowing capacity
@@ -362,7 +362,7 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
         )}
       </div>
       {!readOnly && (
-        <p className="text-xs text-slate-500">Tick the items to include in the borrowing calculation.</p>
+        <p className="text-xs text-muted">Tick the items to include in the borrowing calculation.</p>
       )}
 
       {recalcResult && (
@@ -380,10 +380,10 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
       )}
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-white/50 bg-white/40 backdrop-blur-sm">
+      <div className="overflow-x-auto rounded-xl border border-white/12 bg-white/5 backdrop-blur-sm">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b border-white/60 text-left text-xs uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-white/15 text-left text-xs uppercase tracking-wide text-muted">
               <th className="px-3 py-2">Sr No.</th>
               <th className="px-3 py-2">Property Type</th>
               <th className="px-3 py-2">Address</th>
@@ -407,7 +407,7 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
               const isOpen = !!expanded[p.id];
               return (
                 <React.Fragment key={p.id}>
-                  <tr className="row-hover border-b border-white/30 text-slate-800">
+                  <tr className="row-hover border-b border-white/30 text-primary">
                     <td className="px-3 py-2">{idx + 1}</td>
                     <td className="px-3 py-2">{p.type.replace(/_/g, ' ')}</td>
                     <td className="px-3 py-2">
@@ -434,14 +434,14 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
                     {!readOnly && (
                       <td className="px-3 py-2 whitespace-nowrap">
                         <button onClick={() => openEdit(p)} className="mr-2 text-xs font-medium text-brand hover:underline">Edit</button>
-                        <button onClick={() => deleteProperty(p)} className="text-xs font-medium text-red-600 hover:underline">Delete</button>
+                        <button onClick={() => deleteProperty(p)} className="text-xs font-medium text-crimson hover:underline">Delete</button>
                       </td>
                     )}
                   </tr>
-                  <tr className="border-b border-white/30 bg-white/20">
+                  <tr className="border-b border-white/30 bg-white/5">
                     <td colSpan={readOnly ? 13 : 14} className="px-3 py-1">
                       <button onClick={() => setExpanded((s) => ({ ...s, [p.id]: !s[p.id] }))}
-                        className="text-xs font-medium text-slate-600 transition-colors hover:text-brand"
+                        className="text-xs font-medium text-secondary transition-colors hover:text-brand"
                         aria-expanded={isOpen}>
                         <span className={`mr-1 inline-block transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`}>▸</span>
                         {isOpen ? 'Hide property performance' : 'View property performance'}
@@ -449,31 +449,31 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
                       <div className={`collapsible ${isOpen ? 'is-open' : ''}`}>
                         <div className="collapsible-inner">
                           <div className="py-3">
-                            <div className="mb-2 flex justify-between text-xs text-slate-500">
+                            <div className="mb-2 flex justify-between text-xs text-muted">
                               <span>Purchase {money(g?.purchasePrice ?? p.purchasePrice ?? null)}</span>
                               <span>Now {money(p.estimatedValue)}</span>
                             </div>
                             <GrowthBar purchase={g?.purchasePrice ?? p.purchasePrice ?? null} current={p.estimatedValue} />
                             <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
                               <div>
-                                <p className="text-xs text-slate-500">Capital growth</p>
+                                <p className="text-xs text-muted">Capital growth</p>
                                 <p className="font-semibold">{money(g?.capitalGrowthDollars)}</p>
-                                <p className="text-xs text-slate-500">{pct(g?.capitalGrowthPercent)}</p>
+                                <p className="text-xs text-muted">{pct(g?.capitalGrowthPercent)}</p>
                               </div>
                               <div>
-                                <p className="text-xs text-slate-500">Years held</p>
+                                <p className="text-xs text-muted">Years held</p>
                                 <p className="font-semibold">{yearsMonths(g?.yearsHeld)}</p>
                               </div>
                               <div>
-                                <p className="text-xs text-slate-500">CAGR</p>
+                                <p className="text-xs text-muted">CAGR</p>
                                 <p className="font-semibold">{pct(g?.cagrPercent)}</p>
                               </div>
                               <div>
-                                <p className="text-xs text-slate-500">Total gross rent</p>
+                                <p className="text-xs text-muted">Total gross rent</p>
                                 <p className="font-semibold">{money(g?.totalGrossRent)}</p>
                               </div>
                               <div>
-                                <p className="text-xs text-slate-500">Gross yield</p>
+                                <p className="text-xs text-muted">Gross yield</p>
                                 <p className="font-semibold">{pct(g?.grossYieldPercent)}</p>
                               </div>
                             </div>
@@ -486,7 +486,7 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
               );
             })}
             {properties.length === 0 && (
-              <tr><td colSpan={readOnly ? 13 : 14} className="px-3 py-6 text-center text-sm text-slate-500">No properties yet.</td></tr>
+              <tr><td colSpan={readOnly ? 13 : 14} className="px-3 py-6 text-center text-sm text-muted">No properties yet.</td></tr>
             )}
           </tbody>
         </table>
@@ -515,7 +515,7 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
                 <Button variant="secondary" size="sm" type="button"
                   onClick={fetchRentalEstimate} loading={estimating}
                   disabled={!editing.address && !editing.postcode}>
-                  Get rental estimate
+                  Get valuation (realestate.com.au via Apify)
                 </Button>
               </div>
               {(estimate || estimateMsg) && (
@@ -528,7 +528,7 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
                             <p className="font-semibold">
                               Estimated rent: {money(estimate.rentalEstimateWeekly)} p.w
                               {(estimate.rentalRangeLow != null || estimate.rentalRangeHigh != null) && (
-                                <span className="font-normal text-slate-600">
+                                <span className="font-normal text-secondary">
                                   {' '}(range {money(estimate.rentalRangeLow)} – {money(estimate.rentalRangeHigh)})
                                 </span>
                               )}
@@ -537,7 +537,7 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
                           {estimate.estimatedValue != null && (
                             <p className="font-semibold">Estimated value: {money(estimate.estimatedValue)}</p>
                           )}
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-muted">
                             Source: {estimate.source}
                             {estimate.confidence != null && ` · confidence: ${estimate.confidence}`}
                             {' '}· an estimate only; you can edit before saving.
@@ -549,7 +549,7 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
                       </div>
                     </Alert>
                   ) : (
-                    <p className="text-xs text-slate-500">{estimateMsg}</p>
+                    <p className="text-xs text-muted">{estimateMsg}</p>
                   )}
                 </div>
               )}
@@ -563,8 +563,8 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
                 onChange={(e) => setEditing({ ...editing, rentalIncomeFrequency: e.target.value as Frequency })} />
             </div>
 
-            <div className="border-t border-white/40 pt-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Linked / inline loan</p>
+            <div className="border-t border-white/10 pt-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Linked / inline loan</p>
               {existingLoans.length > 0 && (
                 <Select label="Link existing home loan (preferred)" className="mb-3"
                   options={[{ value: '', label: '— none —' }, ...existingLoans.map((l) => ({
@@ -594,7 +594,7 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
               <input type="checkbox" checked={editing.includeInServicing !== false}
                 onChange={(e) => setEditing({ ...editing, includeInServicing: e.target.checked })}
                 className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" />
-              <span className="text-sm text-slate-700">Include in servicing</span>
+              <span className="text-sm text-secondary">Include in servicing</span>
             </label>
 
             <div className="flex justify-end gap-2 pt-2">

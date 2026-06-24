@@ -1,65 +1,43 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { Spinner } from '@/components/ui/Spinner';
-import { Button } from '@/components/ui/Button';
-import { Logo } from '@/components/ui/Logo';
-import { GlassBackground } from '@/components/ui/GlassBackground';
+import { SpatialShell, ShellNavItem } from '@/components/ui/SpatialShell';
+
+const NAV: ShellNavItem[] = [
+  {
+    href: '/admin',
+    label: 'Clients',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-5 w-5">
+        <path d="M16 11a4 4 0 10-4-4 4 4 0 004 4zm-8 1a3.5 3.5 0 10-3.5-3.5A3.5 3.5 0 008 12zm0 2c-3 0-6 1.6-6 4v2h8v-2c0-1 .4-1.9 1-2.7A9.6 9.6 0 008 14zm8 0c-3.3 0-7 1.7-7 4.3V20h14v-1.7c0-2.6-3.7-4.3-7-4.3z" />
+      </svg>
+    ),
+  },
+];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
 
-  if (loading) {
+  if (loading || !user) {
     return (
-      <div className="relative min-h-screen flex items-center justify-center">
-        <GlassBackground variant="dark" />
-        <Spinner size="lg" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="relative min-h-screen flex items-center justify-center">
-        <GlassBackground variant="dark" />
+      <div className="relative flex min-h-screen items-center justify-center">
         <Spinner size="lg" />
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen">
-      <GlassBackground variant="dark" />
-      <nav className="glass-nav-dark sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center gap-8">
-              <Link href="/admin" className="flex items-center gap-3" aria-label="TransformBiz Admin home">
-                <span className="inline-flex items-center bg-white rounded-lg px-2 py-1 shadow-sm">
-                  <Logo width={140} />
-                </span>
-                <span className="text-sm font-semibold text-white tracking-wide uppercase">Admin</span>
-              </Link>
-              <div className="hidden sm:flex items-center gap-4">
-                <Link href="/admin" className="text-sm font-medium text-slate-200 hover:text-white transition-colors">
-                  Clients
-                </Link>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-slate-200">{user.name}</span>
-              <Button variant="ghost" size="sm" onClick={logout} className="text-slate-200 hover:bg-white/10 hover:text-white">
-                Sign Out
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
-      </main>
-    </div>
+    <SpatialShell
+      navItems={NAV}
+      homeHref="/admin"
+      brand="TransformBiz"
+      tag="Admin"
+      userName={user.name}
+      onLogout={logout}
+    >
+      {children}
+    </SpatialShell>
   );
 }

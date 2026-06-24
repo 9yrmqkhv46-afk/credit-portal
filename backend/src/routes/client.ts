@@ -108,7 +108,7 @@ const incomeSourceSchema = z.object({
   owner: z.enum(['SELF', 'PARTNER']).optional(),
   type: z.enum(['SALARY', 'BONUS', 'COMMISSION', 'RENTAL', 'INVESTMENT', 'GOVERNMENT', 'OTHER']),
   amount: z.number().positive(),
-  frequency: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']),
+  frequency: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']),
   // Defensive: accept null for the optional free-text description so a blank
   // field coming from the UI does not trigger a 400.
   description: z.string().nullable().optional(),
@@ -387,9 +387,9 @@ const propertySchema = z.object({
   holidayFlag: z.boolean().optional(),
   eligibleNegativeGearing: z.boolean().optional(),
   rentalIncomeAmount: z.number().min(0).nullable().optional(),
-  rentalIncomeFrequency: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).nullable().optional(),
+  rentalIncomeFrequency: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).nullable().optional(),
   investmentExpenseAmount: z.number().min(0).nullable().optional(),
-  investmentExpenseFrequency: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).nullable().optional(),
+  investmentExpenseFrequency: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).nullable().optional(),
   valuationSource: z.string().nullable().optional(),
   valuationDate: z.string().nullable().optional(),
   ownership: z.string().nullable().optional(),
@@ -549,21 +549,35 @@ router.delete('/properties/:id', async (req: AuthRequest, res: Response): Promis
 // must NOT be nullable. They are optional only (blank => undefined => DB default).
 const expenseSchema = z.object({
   groceries: z.number().min(0).optional(),
-  groceriesFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
+  groceriesFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).optional(),
   utilities: z.number().min(0).optional(),
-  utilitiesFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
+  utilitiesFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).optional(),
   transport: z.number().min(0).optional(),
-  transportFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
+  transportFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).optional(),
   insurance: z.number().min(0).optional(),
-  insuranceFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
+  insuranceFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).optional(),
   education: z.number().min(0).optional(),
-  educationFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
+  educationFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).optional(),
   childcare: z.number().min(0).optional(),
-  childcareFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
+  childcareFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).optional(),
   entertainment: z.number().min(0).optional(),
-  entertainmentFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
+  entertainmentFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).optional(),
   otherExpenses: z.number().min(0).optional(),
-  otherExpensesFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
+  otherExpensesFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).optional(),
+
+  // --- Expanded living-expense categories (A2) ---
+  // Amount columns are NULLABLE Float -> `.nullable().optional()`. The matching
+  // *Freq columns are NON-nullable (DB default 'MONTHLY') -> enum optional only.
+  rental: z.number().min(0).nullable().optional(),
+  rentalFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).optional(),
+  schoolFees: z.number().min(0).nullable().optional(),
+  schoolFeesFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).optional(),
+  homeLoanRepayment: z.number().min(0).nullable().optional(),
+  homeLoanRepaymentFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).optional(),
+  creditCardRepayment: z.number().min(0).nullable().optional(),
+  creditCardRepaymentFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).optional(),
+  otherLoanRepayment: z.number().min(0).nullable().optional(),
+  otherLoanRepaymentFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']).optional(),
 });
 
 // GET /api/client/expense-summary

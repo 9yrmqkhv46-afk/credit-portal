@@ -145,7 +145,7 @@ model Property {
   updatedAt       DateTime @updatedAt
 }
 
-// Frequency: WEEKLY | FORTNIGHTLY | MONTHLY | ANNUAL
+// Frequency: WEEKLY | FORTNIGHTLY | MONTHLY | QUARTERLY | ANNUAL
 model ExpenseSummary {
   id              String   @id @default(uuid())
   clientProfileId String   @unique
@@ -167,6 +167,24 @@ model ExpenseSummary {
   entertainmentFreq String  @default("MONTHLY")
   otherExpenses     Float   @default(0)
   otherExpensesFreq String  @default("MONTHLY")
+
+  // --- Expanded living-expense categories (A2). All amounts are OPTIONAL
+  // (nullable Float) so a blank UI row is simply omitted; the matching *Freq
+  // columns are non-nullable and default to MONTHLY. NOTE: homeLoanRepayment /
+  // creditCardRepayment / otherLoanRepayment here are USER-ENTERED expense
+  // commitments and are added on top of monthly commitments in the servicing
+  // engine; they are intentionally separate from the liabilities module (no
+  // double-counting is performed against PersonalLiability rows). ---
+  rental                  Float?
+  rentalFreq              String  @default("MONTHLY")
+  schoolFees              Float?
+  schoolFeesFreq          String  @default("MONTHLY")
+  homeLoanRepayment       Float?
+  homeLoanRepaymentFreq   String  @default("MONTHLY")
+  creditCardRepayment     Float?
+  creditCardRepaymentFreq String  @default("MONTHLY")
+  otherLoanRepayment      Float?
+  otherLoanRepaymentFreq  String  @default("MONTHLY")
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -279,6 +297,10 @@ model IncomeEntry {
   applicantId     String?
   applicant       Applicant? @relation(fields: [applicantId], references: [id])
 
+  // Owner of this income entry: SELF | PARTNER (nullable, defaults SELF). The
+  // Partner option is surfaced in the UI when the profile maritalStatus is
+  // MARRIED or DE_FACTO; the servicing engine sums all entries regardless.
+  owner           String?  @default("SELF")
   category        String
   amount          Float
   frequency       String   @default("ANNUAL")

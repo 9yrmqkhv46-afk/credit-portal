@@ -19,7 +19,7 @@ export interface AuthResponse {
 export type ResidencyStatus = 'CITIZEN' | 'PERMANENT_RESIDENT' | 'TEMPORARY_VISA';
 export type MaritalStatus = 'SINGLE' | 'MARRIED' | 'DE_FACTO' | 'DIVORCED' | 'WIDOWED';
 export type EmploymentStatus = 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'SELF_EMPLOYED' | 'UNEMPLOYED' | 'RETIRED';
-export type Frequency = 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'ANNUAL';
+export type Frequency = 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'QUARTERLY' | 'ANNUAL';
 export type IncomeOwner = 'SELF' | 'PARTNER';
 export type IncomeType = 'SALARY' | 'BONUS' | 'COMMISSION' | 'RENTAL' | 'INVESTMENT' | 'GOVERNMENT' | 'OTHER';
 export type DebtType = 'HOME_LOAN' | 'PERSONAL_LOAN' | 'CAR_LOAN' | 'CREDIT_CARD' | 'HECS' | 'OTHER';
@@ -150,6 +150,18 @@ export interface ExpenseSummary {
   entertainmentFreq: Frequency;
   otherExpenses: number;
   otherExpensesFreq: Frequency;
+  // Expanded living-expense categories (A2). Amounts optional (nullable);
+  // *Freq columns default MONTHLY.
+  rental?: number | null;
+  rentalFreq?: Frequency;
+  schoolFees?: number | null;
+  schoolFeesFreq?: Frequency;
+  homeLoanRepayment?: number | null;
+  homeLoanRepaymentFreq?: Frequency;
+  creditCardRepayment?: number | null;
+  creditCardRepaymentFreq?: Frequency;
+  otherLoanRepayment?: number | null;
+  otherLoanRepaymentFreq?: Frequency;
   createdAt: string;
   updatedAt: string;
 }
@@ -301,6 +313,7 @@ export interface IncomeEntry {
   id: string;
   clientProfileId: string;
   applicantId: string | null;
+  owner?: IncomeOwner | null;
   category: IncomeCategory;
   amount: number;
   frequency: Frequency;

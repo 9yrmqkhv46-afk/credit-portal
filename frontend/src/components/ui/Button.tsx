@@ -27,10 +27,10 @@ export function Button({
       'bg-gradient-to-br from-brand to-brand-dark text-white shadow-lg shadow-brand/25 hover:shadow-xl hover:brightness-110 focus:ring-brand',
     // Frosted glass / outline.
     secondary:
-      'glass-input border border-white/60 text-brand hover:bg-white/90 focus:ring-brand shadow-sm',
+      'glass-input border border-white/15 text-brand hover:bg-white/10 focus:ring-brand shadow-sm',
     danger:
-      'bg-gradient-to-br from-red-500 to-red-600 text-white shadow-lg shadow-red-500/25 hover:brightness-110 focus:ring-red-500',
-    ghost: 'bg-transparent text-slate-700 hover:bg-white/50 focus:ring-slate-400',
+      'bg-gradient-to-br from-danger to-crimson text-white shadow-lg shadow-danger/25 hover:brightness-110 focus:ring-danger',
+    ghost: 'bg-transparent text-secondary hover:bg-white/10 hover:text-primary focus:ring-brand',
   };
 
   const sizeStyles = {

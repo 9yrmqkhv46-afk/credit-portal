@@ -18,7 +18,7 @@ function pct(n: number | null | undefined): string {
 /** Growth bar: purchase price -> current value, coloured green/amber/red. */
 function GrowthBar({ purchase, current }: { purchase: number | null; current: number }) {
   if (!purchase || purchase <= 0) {
-    return <div className="h-2 w-full rounded-full bg-slate-200" aria-hidden="true" />;
+    return <div className="h-2 w-full rounded-full bg-white/10" aria-hidden="true" />;
   }
   const ratio = current / purchase;
   const growthPct = (ratio - 1) * 100;
@@ -26,7 +26,7 @@ function GrowthBar({ purchase, current }: { purchase: number | null; current: nu
   // Fill proportional to growth, capped 0..100 for display.
   const fill = Math.max(4, Math.min(100, (ratio / 2) * 100));
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200" role="img" aria-label={`Growth ${growthPct.toFixed(1)} percent`}>
+    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10" role="img" aria-label={`Growth ${growthPct.toFixed(1)} percent`}>
       <div className={`h-full ${color} transition-all`} style={{ width: `${fill}%` }} />
     </div>
   );
@@ -35,9 +35,9 @@ function GrowthBar({ purchase, current }: { purchase: number | null; current: nu
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="glass rounded-2xl p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
-      {sub && <p className="mt-0.5 text-sm text-slate-600">{sub}</p>}
+      <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-primary">{value}</p>
+      {sub && <p className="mt-0.5 text-sm text-secondary">{sub}</p>}
     </div>
   );
 }
@@ -70,8 +70,8 @@ export default function PropertyGrowthPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Property Growth &amp; Progress</h1>
-          <p className="text-sm text-slate-600">Portfolio capital growth, equity and rental yield over time.</p>
+          <h1 className="text-2xl font-bold text-primary">Property Growth &amp; Progress</h1>
+          <p className="text-sm text-secondary">Portfolio capital growth, equity and rental yield over time.</p>
         </div>
         <Link href="/dashboard/profile" className="text-sm font-medium text-brand hover:text-brand-dark">
           Manage properties →
@@ -79,7 +79,7 @@ export default function PropertyGrowthPage() {
       </div>
 
       {error && (
-        <div className="glass rounded-2xl p-6 text-slate-700">{error}</div>
+        <div className="glass rounded-2xl p-6 text-secondary">{error}</div>
       )}
 
       {portfolio && portfolio.propertyCount > 0 && (
@@ -98,22 +98,22 @@ export default function PropertyGrowthPage() {
                 <div key={p.id} className="glass rounded-2xl p-5">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="font-semibold text-slate-900">{p.address}</h3>
-                      <p className="text-xs text-slate-500">
+                      <h3 className="font-semibold text-primary">{p.address}</h3>
+                      <p className="text-xs text-muted">
                         {p.type.replace(/_/g, ' ')}{p.postcode ? ` · ${p.postcode}` : ''}
                         {p.includeInServicing === false && (
-                          <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">Excluded from servicing</span>
+                          <span className="ml-2 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-secondary">Excluded from servicing</span>
                         )}
                       </p>
                     </div>
                     <span className="text-right">
-                      <span className="block text-lg font-bold text-slate-900">{money(p.estimatedValue)}</span>
-                      <span className="text-xs text-slate-500">current value</span>
+                      <span className="block text-lg font-bold text-primary">{money(p.estimatedValue)}</span>
+                      <span className="text-xs text-muted">current value</span>
                     </span>
                   </div>
 
                   <div className="mt-4">
-                    <div className="mb-1 flex justify-between text-xs text-slate-500">
+                    <div className="mb-1 flex justify-between text-xs text-muted">
                       <span>Purchase {money(g?.purchasePrice ?? p.purchasePrice ?? null)}</span>
                       <span>Now {money(p.estimatedValue)}</span>
                     </div>
@@ -122,21 +122,21 @@ export default function PropertyGrowthPage() {
 
                   <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                     <div>
-                      <p className="text-xs text-slate-500">Growth</p>
-                      <p className="font-semibold text-slate-900">{money(g?.capitalGrowthDollars)}</p>
-                      <p className="text-xs text-slate-500">{pct(g?.capitalGrowthPercent)}</p>
+                      <p className="text-xs text-muted">Growth</p>
+                      <p className="font-semibold text-primary">{money(g?.capitalGrowthDollars)}</p>
+                      <p className="text-xs text-muted">{pct(g?.capitalGrowthPercent)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">CAGR</p>
-                      <p className="font-semibold text-slate-900">{pct(g?.cagrPercent)}</p>
+                      <p className="text-xs text-muted">CAGR</p>
+                      <p className="font-semibold text-primary">{pct(g?.cagrPercent)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">Years held</p>
-                      <p className="font-semibold text-slate-900">{g?.yearsHeld ? g.yearsHeld.toFixed(1) : '—'}</p>
+                      <p className="text-xs text-muted">Years held</p>
+                      <p className="font-semibold text-primary">{g?.yearsHeld ? g.yearsHeld.toFixed(1) : '—'}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">Gross yield</p>
-                      <p className="font-semibold text-slate-900">{pct(g?.grossYieldPercent)}</p>
+                      <p className="text-xs text-muted">Gross yield</p>
+                      <p className="font-semibold text-primary">{pct(g?.grossYieldPercent)}</p>
                     </div>
                   </div>
                 </div>
@@ -147,12 +147,12 @@ export default function PropertyGrowthPage() {
       )}
 
       {portfolio && portfolio.propertyCount === 0 && !error && (
-        <div className="glass rounded-2xl p-6 text-slate-700">
+        <div className="glass rounded-2xl p-6 text-secondary">
           No properties yet. Add a property in your <Link href="/dashboard/profile" className="text-brand">profile</Link> to see growth.
         </div>
       )}
 
-      <p className="text-xs text-slate-500">Indicative estimate only - not a credit decision.</p>
+      <p className="text-xs text-muted">Indicative estimate only - not a credit decision.</p>
     </div>
   );
 }

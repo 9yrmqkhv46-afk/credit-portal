@@ -19,7 +19,7 @@ import { computePropertyGrowth } from '../services/servicing';
 const router = Router();
 router.use(authenticate);
 
-const FREQ = z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']);
+const FREQ = z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL']);
 
 /** Get (the caller's) profile or send a 404. Returns null if not found. */
 async function getOwnProfile(req: AuthRequest) {
@@ -181,6 +181,8 @@ router.delete('/dependants/:id', async (req: AuthRequest, res: Response): Promis
 // ===========================================================================
 const incomeEntrySchema = z.object({
   applicantId: z.string().nullable().optional(),
+  // Owner maps to the nullable IncomeEntry.owner column -> .nullable().optional().
+  owner: z.enum(['SELF', 'PARTNER']).nullable().optional(),
   category: z.string().min(1),
   amount: z.number().min(0),
   frequency: FREQ.optional(),

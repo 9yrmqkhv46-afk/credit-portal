@@ -112,6 +112,26 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
   return (
     <div className="relative flex min-h-screen items-center justify-center px-4">
       <AuthScene />
+      {/* Orbiting finance-symbol pills around the card (visionOS signature).
+          Motion is disabled under prefers-reduced-motion via globals.css. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden items-center justify-center sm:flex">
+        <div className="relative h-0 w-0">
+          {['AU$', 'LVR', 'DTI', 'CAGR', 'IRR', 'P&I', 'IO', '%', '↑', '$'].map((sym, i) => {
+            const total = 10;
+            const radius = 190 + (i % 3) * 46;
+            const delay = -(26 / total) * i;
+            return (
+              <span key={i} className="orbit" style={{ animationDelay: `${delay}s` }}>
+                <span className="orbit-arm" style={{ transform: `translateX(${radius}px)` }}>
+                  <span className="orbit-pill" style={{ animationDelay: `${delay}s` }}>
+                    {sym}
+                  </span>
+                </span>
+              </span>
+            );
+          })}
+        </div>
+      </div>
       <div
         ref={cardRef}
         className={`auth-card glass-dark w-full max-w-md rounded-2xl p-8 text-white ${success ? 'auth-success' : ''} ${wiggle ? 'auth-wiggle' : ''}`}

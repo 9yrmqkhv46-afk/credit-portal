@@ -75,8 +75,8 @@ export default function ResultsPage() {
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Borrowing Capacity Results</h1>
-          <p className="mt-1 text-slate-600">
+          <h1 className="text-2xl font-bold text-primary">Borrowing Capacity Results</h1>
+          <p className="mt-1 text-secondary">
             {scenario.purpose} | {scenario.repaymentType === 'PI' ? 'Principal & Interest' : 'Interest Only'} | {scenario.loanTermYears} years
           </p>
         </div>
@@ -107,11 +107,11 @@ export default function ResultsPage() {
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Estimated Repayments</h3>
-            <p className="text-sm text-slate-500">At your {actualRatePct}% rate over {scenario.loanTermYears} years</p>
+            <h3 className="text-lg font-semibold text-primary">Estimated Repayments</h3>
+            <p className="text-sm text-muted">At your {actualRatePct}% rate over {scenario.loanTermYears} years</p>
           </div>
           {/* Frequency toggle — frosted segmented control */}
-          <div className="inline-flex rounded-xl border border-white/60 bg-white/40 p-1 backdrop-blur-md shadow-sm">
+          <div className="inline-flex rounded-xl border border-white/15 bg-white/5 p-1 backdrop-blur-md shadow-sm">
             {FREQUENCY_TABS.map((tab) => (
               <button
                 key={tab.key}
@@ -121,7 +121,7 @@ export default function ResultsPage() {
                   'rounded-lg px-4 py-1.5 text-sm font-medium transition',
                   frequency === tab.key
                     ? 'bg-gradient-to-br from-brand to-brand-dark text-white shadow-md'
-                    : 'text-slate-600 hover:text-slate-900',
+                    : 'text-secondary hover:text-primary',
                 ].join(' ')}
               >
                 {tab.label}
@@ -132,24 +132,24 @@ export default function ResultsPage() {
 
         <div className="mt-5 flex items-baseline gap-2">
           <span className="text-4xl font-bold text-brand">{formatCurrency(selectedRepayment)}</span>
-          <span className="text-sm text-slate-500">/ {frequency}</span>
+          <span className="text-sm text-muted">/ {frequency}</span>
         </div>
 
         <dl className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-white/50 bg-white/40 p-4">
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Monthly</dt>
-            <dd className="mt-1 text-lg font-semibold text-slate-900">{formatCurrency(repayments.monthly)}</dd>
+          <div className="rounded-xl border border-white/12 bg-white/5 p-4">
+            <dt className="text-xs uppercase tracking-wide text-muted">Monthly</dt>
+            <dd className="mt-1 text-lg font-semibold text-primary">{formatCurrency(repayments.monthly)}</dd>
           </div>
-          <div className="rounded-xl border border-white/50 bg-white/40 p-4">
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Total Interest</dt>
-            <dd className="mt-1 text-lg font-semibold text-slate-900">{formatCurrency(repayments.totalInterest)}</dd>
+          <div className="rounded-xl border border-white/12 bg-white/5 p-4">
+            <dt className="text-xs uppercase tracking-wide text-muted">Total Interest</dt>
+            <dd className="mt-1 text-lg font-semibold text-primary">{formatCurrency(repayments.totalInterest)}</dd>
           </div>
-          <div className="rounded-xl border border-white/50 bg-white/40 p-4">
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Total Cost</dt>
-            <dd className="mt-1 text-lg font-semibold text-slate-900">{formatCurrency(repayments.totalRepayments)}</dd>
+          <div className="rounded-xl border border-white/12 bg-white/5 p-4">
+            <dt className="text-xs uppercase tracking-wide text-muted">Total Cost</dt>
+            <dd className="mt-1 text-lg font-semibold text-primary">{formatCurrency(repayments.totalRepayments)}</dd>
           </div>
         </dl>
-        <p className="mt-3 text-xs text-slate-400">
+        <p className="mt-3 text-xs text-faint">
           Estimate only. {scenario.repaymentType === 'PI' ? 'Principal & Interest' : 'Interest Only'} at the actual rate;
           total cost includes principal plus interest over the full term.
         </p>
@@ -160,16 +160,16 @@ export default function ResultsPage() {
         <Card title="Income vs Expenses">
           <dl className="space-y-3">
             <div className="flex justify-between">
-              <dt className="text-sm text-gray-600">Total Monthly Income</dt>
+              <dt className="text-sm text-secondary">Total Monthly Income</dt>
               <dd className="text-sm font-semibold text-green-700">{formatCurrency(scenario.totalMonthlyIncome)}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-sm text-gray-600">Total Monthly Expenses</dt>
-              <dd className="text-sm font-semibold text-red-700">{formatCurrency(scenario.totalMonthlyExpenses)}</dd>
+              <dt className="text-sm text-secondary">Total Monthly Expenses</dt>
+              <dd className="text-sm font-semibold text-crimson">{formatCurrency(scenario.totalMonthlyExpenses)}</dd>
             </div>
             <div className="border-t pt-3 flex justify-between">
-              <dt className="text-sm font-medium text-gray-900">Net Monthly Surplus</dt>
-              <dd className="text-sm font-bold text-gray-900">{formatCurrency(scenario.netMonthlySurplus)}</dd>
+              <dt className="text-sm font-medium text-primary">Net Monthly Surplus</dt>
+              <dd className="text-sm font-bold text-primary">{formatCurrency(scenario.netMonthlySurplus)}</dd>
             </div>
           </dl>
         </Card>
@@ -177,15 +177,15 @@ export default function ResultsPage() {
         <Card title="Capacity Limits">
           <dl className="space-y-3">
             <div className="flex justify-between">
-              <dt className="text-sm text-gray-600">Serviceability Max</dt>
+              <dt className="text-sm text-secondary">Serviceability Max</dt>
               <dd className="text-sm font-semibold">{formatCurrency(scenario.serviceabilityMax)}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-sm text-gray-600">DTI Max</dt>
+              <dt className="text-sm text-secondary">DTI Max</dt>
               <dd className="text-sm font-semibold">{formatCurrency(scenario.dtiMax)}</dd>
             </div>
             <div className="border-t pt-3 flex justify-between">
-              <dt className="text-sm font-medium text-gray-900">Final (lower of the two)</dt>
+              <dt className="text-sm font-medium text-primary">Final (lower of the two)</dt>
               <dd className="text-sm font-bold text-brand">{formatCurrency(scenario.maxBorrowingCapacity)}</dd>
             </div>
           </dl>
@@ -196,21 +196,21 @@ export default function ResultsPage() {
       <Card title="Debt-to-Income Ratio">
         <div className="flex items-center gap-4">
           <div className="flex-1">
-            <div className="w-full bg-slate-200/70 rounded-full h-4 overflow-hidden">
+            <div className="w-full bg-white/10/70 rounded-full h-4 overflow-hidden">
               <div
                 className={`h-4 rounded-full transition-all ${(scenario.dtiRatio ?? 0) <= 6 ? 'bg-gradient-to-r from-emerald-400 to-emerald-600' : 'bg-gradient-to-r from-red-400 to-red-600'}`}
                 style={{ width: `${Math.min(((scenario.dtiRatio ?? 0) / 8) * 100, 100)}%` }}
               />
             </div>
-            <div className="flex justify-between mt-1 text-xs text-slate-500">
+            <div className="flex justify-between mt-1 text-xs text-muted">
               <span>0x</span>
               <span>6x (cap)</span>
               <span>8x</span>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-bold text-gray-900">{formatPercent(scenario.dtiRatio)}</p>
-            <p className="text-xs text-gray-500">DTI Ratio</p>
+            <p className="text-2xl font-bold text-primary">{formatPercent(scenario.dtiRatio)}</p>
+            <p className="text-xs text-muted">DTI Ratio</p>
           </div>
         </div>
         <div className="mt-3">
@@ -224,8 +224,8 @@ export default function ResultsPage() {
 
       {/* Serviceability assessment repayment (stress rate) */}
       <Card title="Serviceability Assessment (Stress Rate)">
-        <p className="text-3xl font-bold text-gray-900">{formatCurrency(scenario.monthlyRepayment)}<span className="text-base font-normal text-gray-500"> / month</span></p>
-        <p className="text-sm text-gray-600 mt-1">
+        <p className="text-3xl font-bold text-primary">{formatCurrency(scenario.monthlyRepayment)}<span className="text-base font-normal text-muted"> / month</span></p>
+        <p className="text-sm text-secondary mt-1">
           This is the assessment figure used to test serviceability, based on a {((scenario.interestRate * 100) + 3).toFixed(1)}% stress rate
           ({(scenario.interestRate * 100).toFixed(1)}% + 3% buffer). Your estimated repayments above use your actual {actualRatePct}% rate.
         </p>
@@ -236,7 +236,7 @@ export default function ResultsPage() {
         <Card title="Assessment Messages">
           <ul className="space-y-2">
             {messages.map((msg: string, idx: number) => (
-              <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
+              <li key={idx} className="flex items-start gap-2 text-sm text-secondary">
                 <span className="text-brand mt-0.5">&#8226;</span>
                 {msg}
               </li>

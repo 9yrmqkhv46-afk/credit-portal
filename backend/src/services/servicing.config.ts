@@ -176,5 +176,6 @@ export const FREQUENCY_PER_YEAR: Record<Frequency, number> = {
   WEEKLY: 52,
   FORTNIGHTLY: 26,
   MONTHLY: 12,
+  QUARTERLY: 4,
   ANNUAL: 1,
 };

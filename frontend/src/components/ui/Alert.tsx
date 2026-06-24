@@ -8,10 +8,10 @@ interface AlertProps {
 
 export function Alert({ variant = 'info', children, className = '' }: AlertProps) {
   const variantStyles = {
-    success: 'bg-green-50/80 border-green-300/60 text-green-800',
-    error: 'bg-red-50/80 border-red-300/60 text-red-800',
-    warning: 'bg-amber-50/80 border-amber-300/60 text-amber-800',
-    info: 'bg-brand-light/80 border-brand/30 text-brand',
+    success: 'bg-success-light border-success/40 text-success',
+    error: 'bg-danger-light border-danger/40 text-danger',
+    warning: 'bg-warning-light border-warning/40 text-warning',
+    info: 'bg-brand-light border-brand/40 text-brand',
   };
 
   return (

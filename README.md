@@ -168,8 +168,46 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `DOMAIN_API_BASE` | Domain API base URL | `https://api.domain.com.au` |
 | `DOMAIN_API_KEY_HEADER` | Header used to send the Domain key (`X-Api-Key` or `Authorization`) | `X-Api-Key` |
 | `APIFY_TOKEN` | Apify API token (enables `apify`). Never commit a real token | _(unset)_ |
-| `APIFY_ACTOR_ID` / `APIFY_TASK_ID` | Apify actor (or saved task) to run for estimates | _(unset)_ |
+| `APIFY_ACTOR_ID` | Apify actor to run for estimates | `abotapi~realestate-au-scraper` |
+| `APIFY_TASK_ID` | Apify saved task to run (use instead of `APIFY_ACTOR_ID`) | _(unset)_ |
+| `APIFY_RUN_MODE` | `sync` (one synchronous call) or `async` (start run, poll, read dataset) | `sync` |
 | `VALUATION_API_KEY` | Legacy key for the `external` placeholder provider | _(unset)_ |
+
+### Property valuation via Apify (realestate.com.au)
+
+The property form's **"Get valuation (realestate.com.au via Apify)"** button calls
+`GET /api/valuation/estimate`, which runs the configured Apify actor and pre-fills
+the property's **Est. valuation** and **Rent p.w** (the broker confirms with
+**"Use this"**; the manually entered value always remains the source of truth for
+ROI/servicing). To enable it on Render (or any host):
+
+1. Set `VALUATION_PROVIDER=apify`.
+2. Set `APIFY_TOKEN` to your Apify token (an **env var only** — never commit it).
+3. (Optional) `APIFY_ACTOR_ID` defaults to
+   [`abotapi~realestate-au-scraper`](https://apify.com/abotapi/realestate-au-scraper);
+   override it (or set `APIFY_TASK_ID` for a saved task) to point at a different actor.
+4. (Optional) `APIFY_RUN_MODE=sync` (default) uses the one-call
+   `run-sync-get-dataset-items` endpoint; `async` starts a run, polls its status,
+   then reads the default dataset.
+
+**How the address triggers a run:** entering an address (+ postcode) and clicking
+the button sends them to the endpoint. The connector builds the actor INPUT
+flexibly — `{ address, postcode, suburb, state, searchUrl, startUrls: [{ url }] }`
+where `searchUrl` is the realestate.com.au search URL — so it works without knowing
+the exact actor schema. **Adjusting the actor input:** the actual
+[`abotapi~realestate-au-scraper`](https://apify.com/abotapi/realestate-au-scraper)
+input schema may differ; tailor the `input` object in
+`backend/src/services/valuation.ts` (`getApifyEstimate`) to match. The first
+dataset item is normalized into `{ estimatedValue?, rentalEstimateWeekly?, address?,
+source:'apify', raw }`, mapping likely fields (`price`, `estimatedValue`, `value`,
+`priceEstimate`, `rentEstimate`, `rentPerWeek`) defensively.
+
+> **Sandbox note:** the build/test sandbox has **no external egress**, so live
+> Apify calls only work on the deployed host (Render). Locally/in CI the provider
+> returns a graceful `{ configured:false }` / `{ error }` shape and the UI falls
+> back to the realestate.com.au link + manual entry — it never crashes the server.
+> A mocked-fetch unit test (`backend/src/__tests__/valuation.test.ts`) exercises the
+> sync normalization, the default actor, the flexible input, and the async run mode.
 
 ### Frontend (`frontend/.env.local`)
 

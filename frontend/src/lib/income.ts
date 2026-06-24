@@ -110,7 +110,7 @@ export const INCOME_SHADING_HINT: Record<string, number> = {
 
 export const DEDUCTION_CATEGORIES = ['PRETAX_DEDUCTION', 'POSTTAX_DEDUCTION'];
 
-const PER_YEAR: Record<string, number> = { WEEKLY: 52, FORTNIGHTLY: 26, MONTHLY: 12, ANNUAL: 1 };
+const PER_YEAR: Record<string, number> = { WEEKLY: 52, FORTNIGHTLY: 26, MONTHLY: 12, QUARTERLY: 4, ANNUAL: 1 };
 
 /** Convert an amount at a frequency to a monthly figure. */
 export function toMonthlyAmount(amount: number, frequency: string): number {

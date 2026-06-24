@@ -59,8 +59,8 @@ export default function CalculatorPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Borrowing Calculator</h1>
-        <p className="mt-1 text-slate-600">Configure your loan scenario and calculate your maximum borrowing capacity.</p>
+        <h1 className="text-2xl font-bold text-primary">Borrowing Calculator</h1>
+        <p className="mt-1 text-secondary">Configure your loan scenario and calculate your maximum borrowing capacity.</p>
       </div>
 
       {error && <Alert variant="error">{error}</Alert>}

@@ -1,11 +1,15 @@
-export type Frequency = 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'ANNUAL';
+export type Frequency = 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'QUARTERLY' | 'ANNUAL';
 
 const WEEKS_PER_YEAR = 52;
 const FORTNIGHTS_PER_YEAR = 26;
 const MONTHS_PER_YEAR = 12;
+const QUARTERS_PER_YEAR = 4;
 
 /**
  * Convert an amount from one frequency to monthly.
+ *
+ * QUARTERLY = 4 payments per year, so a quarterly amount converts to monthly
+ * as amount * 4 / 12 (equivalently amount / 3).
  */
 export function toMonthly(amount: number, frequency: Frequency): number {
   switch (frequency) {
@@ -15,6 +19,8 @@ export function toMonthly(amount: number, frequency: Frequency): number {
       return (amount * FORTNIGHTS_PER_YEAR) / MONTHS_PER_YEAR;
     case 'MONTHLY':
       return amount;
+    case 'QUARTERLY':
+      return (amount * QUARTERS_PER_YEAR) / MONTHS_PER_YEAR;
     case 'ANNUAL':
       return amount / MONTHS_PER_YEAR;
     default:
@@ -33,6 +39,8 @@ export function toAnnual(amount: number, frequency: Frequency): number {
       return amount * FORTNIGHTS_PER_YEAR;
     case 'MONTHLY':
       return amount * MONTHS_PER_YEAR;
+    case 'QUARTERLY':
+      return amount * QUARTERS_PER_YEAR;
     case 'ANNUAL':
       return amount;
     default:
@@ -57,6 +65,8 @@ export function convertFrequency(
       return annual / FORTNIGHTS_PER_YEAR;
     case 'MONTHLY':
       return annual / MONTHS_PER_YEAR;
+    case 'QUARTERLY':
+      return annual / QUARTERS_PER_YEAR;
     case 'ANNUAL':
       return annual;
     default:

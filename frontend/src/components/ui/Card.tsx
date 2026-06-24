@@ -14,16 +14,16 @@ interface CardProps {
 
 export function Card({ children, className = '', title, variant = 'glass', hover = true, style }: CardProps) {
   const variantStyles = {
-    glass: 'glass text-slate-800',
-    dark: 'glass-dark text-white',
-    solid: 'bg-white border border-gray-200 text-slate-800 shadow-sm',
+    glass: 'glass text-secondary',
+    dark: 'glass-dark text-primary',
+    solid: 'glass-2 text-secondary',
   };
 
   const hoverStyles = hover
     ? 'transition duration-300 hover:-translate-y-0.5 hover:shadow-2xl'
     : '';
 
-  const titleColor = variant === 'dark' ? 'text-white' : 'text-slate-900';
+  const titleColor = 'text-primary';
 
   return (
     <div className={`rounded-2xl p-6 ${variantStyles[variant]} ${hoverStyles} ${className}`} style={style}>

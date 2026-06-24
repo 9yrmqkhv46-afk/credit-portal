@@ -135,7 +135,7 @@ function StepProgress({
                       ? 'border-brand bg-brand text-white shadow-md shadow-brand/30 scale-110'
                       : isComplete
                         ? 'border-brand bg-brand-light text-brand'
-                        : 'border-slate-300 bg-white text-slate-400 group-hover:border-slate-400',
+                        : 'border-slate-300 bg-white text-faint group-hover:border-slate-400',
                   ].join(' ')}
                 >
                   {isComplete ? (
@@ -151,14 +151,14 @@ function StepProgress({
                 <span
                   className={[
                     'hidden text-xs font-medium transition-colors sm:block',
-                    isCurrent ? 'text-brand' : isComplete ? 'text-slate-700' : 'text-slate-400',
+                    isCurrent ? 'text-brand' : isComplete ? 'text-secondary' : 'text-faint',
                   ].join(' ')}
                 >
                   {s.label}
                 </span>
               </button>
               {i < steps.length - 1 && (
-                <span className="relative h-0.5 flex-1 overflow-hidden rounded-full bg-slate-200">
+                <span className="relative h-0.5 flex-1 overflow-hidden rounded-full bg-white/10">
                   <span
                     className="bar-fill absolute inset-y-0 left-0 rounded-full bg-brand"
                     style={{ width: i < current ? '100%' : '0%' }}
@@ -283,12 +283,12 @@ export default function ProfilePage() {
   return (
     <div className="space-y-6">
       <div className="animate-enter">
-        <h1 className="text-2xl font-bold text-slate-900">Financial Profile</h1>
-        <p className="mt-1 text-slate-600">
+        <h1 className="text-2xl font-bold text-primary">Financial Profile</h1>
+        <p className="mt-1 text-secondary">
           Everything we need for your borrowing assessment lives here — personal details, income,
           properties, loans, liabilities and expenses, all in one place.
         </p>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-muted">
           Tick the items to include in the borrowing calculation as you go.
         </p>
       </div>
@@ -303,14 +303,14 @@ export default function ProfilePage() {
 
       {/* Step Content — re-keyed so it re-animates on each step change. */}
       <Card key={step} className="animate-enter">
-        <div className="mb-5 flex items-start gap-3 border-b border-white/40 pb-4">
+        <div className="mb-5 flex items-start gap-3 border-b border-white/10 pb-4">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-light text-brand">
             <SectionIcon path={STEPS[step].icon} className="h-5 w-5" />
           </span>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-brand">Step {step + 1} of {STEPS.length}</p>
-            <h3 className="mt-0.5 text-lg font-semibold text-slate-900">{STEPS[step].label}</h3>
-            <p className="mt-1 text-sm text-slate-500">{STEPS[step].help}</p>
+            <h3 className="mt-0.5 text-lg font-semibold text-primary">{STEPS[step].label}</h3>
+            <p className="mt-1 text-sm text-muted">{STEPS[step].help}</p>
           </div>
         </div>
 
@@ -335,7 +335,7 @@ export default function ProfilePage() {
             </div>
             <label className="flex cursor-pointer items-center gap-2">
               <input type="checkbox" checked={profileData.privateSchoolingFlag} onChange={(e) => setProfileData({ ...profileData, privateSchoolingFlag: e.target.checked })} className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" />
-              <span className="text-sm text-slate-700">Private schooling</span>
+              <span className="text-sm text-secondary">Private schooling</span>
             </label>
           </div>
         )}
@@ -353,13 +353,13 @@ export default function ProfilePage() {
               <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-brand">Estimated max borrowing capacity</p>
-                  <p className="mt-1 text-4xl font-bold text-slate-900">
+                  <p className="mt-1 text-4xl font-bold text-primary">
                     {recalc
                       ? <AnimatedNumber value={recalc.maxBorrowingCapacity} prefix="$" />
-                      : <span className="text-slate-400">$0</span>}
+                      : <span className="text-faint">$0</span>}
                   </p>
                   {recalc && (
-                    <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
+                    <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-secondary">
                       <span>Monthly surplus: {money(recalc.netMonthlySurplus)}</span>
                       <span>Monthly commitments: {money(recalc.monthlyCommitments)}</span>
                       <span>DTI: {recalc.dtiRatio.toFixed(2)}x</span>
@@ -368,18 +368,18 @@ export default function ProfilePage() {
                 </div>
                 <Button onClick={handleRecalc} loading={recalcing}>Recalculate borrowing capacity</Button>
               </div>
-              <p className="mt-3 text-xs text-slate-500">Indicative estimate only - not a credit decision.</p>
+              <p className="mt-3 text-xs text-muted">Indicative estimate only - not a credit decision.</p>
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">Deal summary / notes</label>
+              <label className="mb-1.5 block text-sm font-medium text-secondary">Deal summary / notes</label>
               <textarea
-                className="glass-input min-h-[120px] w-full resize-y rounded-xl border border-white/60 px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition-shadow focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="glass-input min-h-[120px] w-full resize-y rounded-xl border border-white/15 px-3.5 py-2.5 text-sm text-primary shadow-sm transition-shadow focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 placeholder="Notes about this deal, goals, or anything your broker should know…"
                 value={notes}
                 onChange={(e) => saveNotes(e.target.value)}
               />
-              <p className="mt-1 text-xs text-slate-500">Saved to this device automatically.</p>
+              <p className="mt-1 text-xs text-muted">Saved to this device automatically.</p>
             </div>
           </div>
         )}

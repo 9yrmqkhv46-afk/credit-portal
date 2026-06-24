@@ -64,11 +64,11 @@ export default function RegisterPage() {
       <GlassBackground variant="light" />
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center justify-center rounded-xl bg-white/70 px-4 py-2 shadow-sm backdrop-blur" aria-label="TransformBiz home">
+          <Link href="/" className="inline-flex items-center justify-center rounded-xl bg-white/10 px-4 py-2 shadow-sm backdrop-blur" aria-label="TransformBiz home">
             <Logo width={220} />
           </Link>
-          <h2 className="mt-6 text-2xl font-bold text-slate-900">Create your account</h2>
-          <p className="mt-2 text-sm text-slate-600">
+          <h2 className="mt-6 text-2xl font-bold text-primary">Create your account</h2>
+          <p className="mt-2 text-sm text-secondary">
             Already have an account?{' '}
             <Link href="/login" className="text-brand hover:text-brand-dark font-medium">
               Sign in

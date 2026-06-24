@@ -26,6 +26,20 @@ describe('Frequency Utility', () => {
     expect(result).toBe(10000);
   });
 
+  test('converts quarterly to monthly correctly (4 periods/year -> amount * 4 / 12)', () => {
+    const result = toMonthly(3000, 'QUARTERLY');
+    expect(result).toBeCloseTo((3000 * 4) / 12, 2); // 1000/month
+  });
+
+  test('converts quarterly to annual correctly (4 periods/year)', () => {
+    expect(toAnnual(3000, 'QUARTERLY')).toBe(12000);
+  });
+
+  test('converts monthly to quarterly via convertFrequency', () => {
+    // 1000/month -> annual 12000 -> quarterly 3000
+    expect(convertFrequency(1000, 'MONTHLY', 'QUARTERLY')).toBe(3000);
+  });
+
   test('converts monthly to annual', () => {
     expect(toAnnual(5000, 'MONTHLY')).toBe(60000);
   });

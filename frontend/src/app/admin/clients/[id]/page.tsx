@@ -123,7 +123,7 @@ export default function AdminClientDetailPage() {
             &larr; Back to Clients
           </Link>
           <h1 className="text-2xl font-bold text-white">{client.name}</h1>
-          <p className="text-slate-300">{client.email}</p>
+          <p className="text-secondary">{client.email}</p>
         </div>
         <div className="flex items-center gap-3">
           <Badge variant={getStatusVariant(profile?.status || 'Prospect')}>
@@ -143,22 +143,22 @@ export default function AdminClientDetailPage() {
       {profile && (
         <Card title="Profile Information">
           <div className="grid md:grid-cols-3 gap-4 text-sm">
-            <div><span className="text-gray-500">Phone:</span> <span className="ml-2 text-gray-900">{profile.phone || '--'}</span></div>
-            <div><span className="text-gray-500">DOB:</span> <span className="ml-2 text-gray-900">{profile.dateOfBirth ? new Date(profile.dateOfBirth).toLocaleDateString() : '--'}</span></div>
-            <div><span className="text-gray-500">Residency:</span> <span className="ml-2 text-gray-900">{profile.residencyStatus}</span></div>
-            <div><span className="text-gray-500">Marital:</span> <span className="ml-2 text-gray-900">{profile.maritalStatus}</span></div>
-            <div><span className="text-gray-500">Employment:</span> <span className="ml-2 text-gray-900">{profile.employmentStatus}</span></div>
-            <div><span className="text-gray-500">Dependants:</span> <span className="ml-2 text-gray-900">{profile.numberOfAdultDependants} adults, {profile.numberOfChildDependants} children</span></div>
+            <div><span className="text-muted">Phone:</span> <span className="ml-2 text-primary">{profile.phone || '--'}</span></div>
+            <div><span className="text-muted">DOB:</span> <span className="ml-2 text-primary">{profile.dateOfBirth ? new Date(profile.dateOfBirth).toLocaleDateString() : '--'}</span></div>
+            <div><span className="text-muted">Residency:</span> <span className="ml-2 text-primary">{profile.residencyStatus}</span></div>
+            <div><span className="text-muted">Marital:</span> <span className="ml-2 text-primary">{profile.maritalStatus}</span></div>
+            <div><span className="text-muted">Employment:</span> <span className="ml-2 text-primary">{profile.employmentStatus}</span></div>
+            <div><span className="text-muted">Dependants:</span> <span className="ml-2 text-primary">{profile.numberOfAdultDependants} adults, {profile.numberOfChildDependants} children</span></div>
           </div>
 
           {/* Income Sources */}
           {profile.incomeSources && profile.incomeSources.length > 0 && (
             <div className="mt-6">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">Income Sources</h4>
+              <h4 className="text-sm font-semibold text-secondary mb-2">Income Sources</h4>
               <div className="space-y-1">
                 {profile.incomeSources.map((inc) => (
                   <div key={inc.id} className="flex justify-between text-sm">
-                    <span className="text-gray-600">{inc.type} ({inc.owner})</span>
+                    <span className="text-secondary">{inc.type} ({inc.owner})</span>
                     <span className="font-medium">${inc.amount.toLocaleString()} {inc.frequency.toLowerCase()}</span>
                   </div>
                 ))}
@@ -169,11 +169,11 @@ export default function AdminClientDetailPage() {
           {/* Existing Debts */}
           {profile.existingDebts && profile.existingDebts.length > 0 && (
             <div className="mt-6">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">Existing Debts</h4>
+              <h4 className="text-sm font-semibold text-secondary mb-2">Existing Debts</h4>
               <div className="space-y-1">
                 {profile.existingDebts.map((debt) => (
                   <div key={debt.id} className="flex justify-between text-sm">
-                    <span className="text-gray-600">{debt.type}</span>
+                    <span className="text-secondary">{debt.type}</span>
                     <span className="font-medium">Balance: ${debt.outstandingBalance.toLocaleString()}</span>
                   </div>
                 ))}
@@ -184,11 +184,11 @@ export default function AdminClientDetailPage() {
           {/* Properties */}
           {profile.properties && profile.properties.length > 0 && (
             <div className="mt-6">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">Properties</h4>
+              <h4 className="text-sm font-semibold text-secondary mb-2">Properties</h4>
               <div className="space-y-1">
                 {profile.properties.map((prop) => (
                   <div key={prop.id} className="flex justify-between text-sm">
-                    <span className="text-gray-600">{prop.type} - {prop.address}</span>
+                    <span className="text-secondary">{prop.type} - {prop.address}</span>
                     <span className="font-medium">${prop.estimatedValue.toLocaleString()}</span>
                   </div>
                 ))}
@@ -219,25 +219,25 @@ export default function AdminClientDetailPage() {
         {client.loanScenarios.length > 0 ? (
           <div className="space-y-3">
             {client.loanScenarios.map((scenario) => (
-              <div key={scenario.id} className="rounded-xl border border-white/50 bg-white/40 p-4">
+              <div key={scenario.id} className="rounded-xl border border-white/12 bg-white/5 p-4">
                 <div className="flex justify-between items-center">
                   <div>
-                    <span className="font-medium text-slate-900">{scenario.purpose}</span>
-                    <span className="ml-3 text-sm text-slate-500">
+                    <span className="font-medium text-primary">{scenario.purpose}</span>
+                    <span className="ml-3 text-sm text-muted">
                       {scenario.repaymentType === 'PI' ? 'P&I' : 'IO'} | {scenario.loanTermYears}yr | {(scenario.interestRate * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-slate-900">
+                    <p className="font-semibold text-primary">
                       {scenario.maxBorrowingCapacity != null
                         ? `$${scenario.maxBorrowingCapacity.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
                         : 'Pending'}
                     </p>
-                    <p className="text-xs text-slate-500">{new Date(scenario.createdAt).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted">{new Date(scenario.createdAt).toLocaleDateString()}</p>
                   </div>
                 </div>
                 {scenario.dtiRatio != null && (
-                  <div className="mt-2 flex gap-4 text-xs text-slate-500 items-center">
+                  <div className="mt-2 flex gap-4 text-xs text-muted items-center">
                     <span>DTI: {scenario.dtiRatio.toFixed(2)}x</span>
                     <span>Monthly Repayment: ${scenario.monthlyRepayment?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '--'}</span>
                     {scenario.passesServiceability && scenario.passesDti ? (
@@ -251,7 +251,7 @@ export default function AdminClientDetailPage() {
             ))}
           </div>
         ) : (
-          <p className="text-gray-500 text-sm">No loan scenarios yet.</p>
+          <p className="text-muted text-sm">No loan scenarios yet.</p>
         )}
       </Card>
 
@@ -261,7 +261,7 @@ export default function AdminClientDetailPage() {
           {/* Add Note Form */}
           <div className="flex gap-2">
             <textarea
-              className="glass-input flex-1 rounded-xl border border-white/60 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand focus:ring-2 focus:ring-brand/30 focus:outline-none resize-none"
+              className="glass-input flex-1 rounded-xl border border-white/15 px-3 py-2 text-sm text-primary shadow-sm focus:border-brand focus:ring-2 focus:ring-brand/30 focus:outline-none resize-none"
               rows={2}
               placeholder="Add a note..."
               value={noteContent}
@@ -274,11 +274,11 @@ export default function AdminClientDetailPage() {
 
           {/* Notes List */}
           {client.notes.length > 0 ? (
-            <div className="space-y-3 border-t border-white/40 pt-4">
+            <div className="space-y-3 border-t border-white/10 pt-4">
               {client.notes.map((note: Note) => (
-                <div key={note.id} className="bg-white/50 rounded-xl p-3">
-                  <p className="text-sm text-slate-900">{note.content}</p>
-                  <div className="mt-1 flex gap-3 text-xs text-slate-500">
+                <div key={note.id} className="bg-white/5 rounded-xl p-3">
+                  <p className="text-sm text-primary">{note.content}</p>
+                  <div className="mt-1 flex gap-3 text-xs text-muted">
                     <span>{new Date(note.createdAt).toLocaleString()}</span>
                     <Badge variant="neutral">{note.visibility}</Badge>
                   </div>
@@ -286,7 +286,7 @@ export default function AdminClientDetailPage() {
               ))}
             </div>
           ) : (
-            <p className="text-slate-500 text-sm border-t border-white/40 pt-4">No notes yet.</p>
+            <p className="text-muted text-sm border-t border-white/10 pt-4">No notes yet.</p>
           )}
         </div>
       </Card>

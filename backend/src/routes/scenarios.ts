@@ -24,7 +24,7 @@ const scenarioSchema = z.object({
   interestRate: z.number().positive().max(1), // as decimal e.g., 0.06
 });
 
-const validFrequencies: Frequency[] = ['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL'];
+const validFrequencies: Frequency[] = ['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL'];
 function parseFrequency(value: string): Frequency {
   if (validFrequencies.includes(value as Frequency)) return value as Frequency;
   throw new Error(`Invalid frequency value: ${value}`);
@@ -103,6 +103,43 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
       livingExpenses = { basicExpenseAmount: basicMonthly, basicExpenseFrequency: 'MONTHLY' };
     }
 
+    // --- Expanded living-expense categories (A2) ---
+    // These optional ExpenseSummary categories are ALWAYS included (regardless
+    // of which basic-expense source is used above) so a provided value is never
+    // dropped. rental + schoolFees are genuine living expenses and are folded
+    // into the declared monthly figure. The three *Repayment categories are
+    // USER-ENTERED expense commitments: we surface them as additive monthly
+    // commitments (injected as synthetic OTHER liabilities below) so they are
+    // never absorbed by the HEM floor. They are intentionally NOT reconciled
+    // against the PersonalLiability module (no double-counting; liabilities
+    // logic is unchanged).
+    let expandedCommitmentsMonthly = 0;
+    if (profile.expenseSummary) {
+      const es: any = profile.expenseSummary;
+      const m = (amt: number | null | undefined, freq: string | null | undefined) =>
+        amt && amt > 0 ? toMonthly(amt, parseFrequency(freq || 'MONTHLY')) : 0;
+      const rentalMonthly = m(es.rental, es.rentalFreq);
+      const schoolFeesMonthly = m(es.schoolFees, es.schoolFeesFreq);
+      expandedCommitmentsMonthly =
+        m(es.homeLoanRepayment, es.homeLoanRepaymentFreq) +
+        m(es.creditCardRepayment, es.creditCardRepaymentFreq) +
+        m(es.otherLoanRepayment, es.otherLoanRepaymentFreq);
+
+      const extraLivingMonthly = rentalMonthly + schoolFeesMonthly;
+      if (extraLivingMonthly > 0) {
+        const base = livingExpenses || { basicExpenseAmount: 0, basicExpenseFrequency: 'MONTHLY' as Frequency };
+        const baseMonthly = toMonthly(
+          base.basicExpenseAmount || 0,
+          (base.basicExpenseFrequency as Frequency) || 'MONTHLY'
+        );
+        livingExpenses = {
+          ...base,
+          basicExpenseAmount: baseMonthly + extraLivingMonthly,
+          basicExpenseFrequency: 'MONTHLY',
+        };
+      }
+    }
+
     // --- Existing home loans (new model) + legacy HOME_LOAN debts ---
     const existingLoans: ExistingLoanInput[] = [
       ...profile.existingHomeLoans.map((l: any) => ({
@@ -140,6 +177,18 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
           includeInServicing: true,
         })),
     ];
+
+    // Inject the expanded ExpenseSummary repayment categories (A2) as additive
+    // monthly commitments via synthetic OTHER liabilities. This keeps them out
+    // of the HEM-floored living-expense total and additive to commitments,
+    // without modifying the liabilities engine logic.
+    if (expandedCommitmentsMonthly > 0) {
+      personalLiabilities.push({
+        type: 'OTHER',
+        repaymentAmount: expandedCommitmentsMonthly,
+        includeInServicing: true,
+      });
+    }
 
     // --- Proposed home loans (selectable as the loan being assessed) ---
     const proposedLoans: ServicingProposedLoanInput[] = profile.proposedHomeLoans.map((l: any) => ({

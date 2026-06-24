@@ -140,23 +140,23 @@ export function OtherLiabilitiesTable({ readOnly = false, initialLiabilities }: 
     finally { setRecalcing(false); }
   }
 
-  if (loading) return <p className="text-sm text-slate-500">Loading liabilities…</p>;
+  if (loading) return <p className="text-sm text-muted">Loading liabilities…</p>;
 
   return (
     <div className="space-y-4">
       {error && <Alert variant="error">{error}</Alert>}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm font-medium text-slate-700">
+        <p className="text-sm font-medium text-secondary">
           {items.length} liabilit{items.length === 1 ? 'y' : 'ies'} total,{' '}
           <span className="text-brand">{includedCount} included in servicing</span>
         </p>
         {!readOnly && (
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1">
-              <span className="text-xs text-slate-500">Rate %</span>
+              <span className="text-xs text-muted">Rate %</span>
               <input type="number" step="0.1" value={ratePct} onChange={(e) => setRatePct(e.target.value)}
-                className="glass-input w-16 rounded-lg border border-white/60 px-2 py-1 text-sm" />
+                className="glass-input w-16 rounded-lg border border-white/15 px-2 py-1 text-sm" />
             </div>
             <Button variant="secondary" size="sm" onClick={handleRecalc} loading={recalcing}>
               Recalculate borrowing capacity
@@ -166,7 +166,7 @@ export function OtherLiabilitiesTable({ readOnly = false, initialLiabilities }: 
         )}
       </div>
       {!readOnly && (
-        <p className="text-xs text-slate-500">Tick the items to include in the borrowing calculation.</p>
+        <p className="text-xs text-muted">Tick the items to include in the borrowing calculation.</p>
       )}
 
       {recalcResult && (
@@ -183,10 +183,10 @@ export function OtherLiabilitiesTable({ readOnly = false, initialLiabilities }: 
         </Alert>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-white/50 bg-white/40 backdrop-blur-sm">
+      <div className="overflow-x-auto rounded-xl border border-white/12 bg-white/5 backdrop-blur-sm">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b border-white/60 text-left text-xs uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-white/15 text-left text-xs uppercase tracking-wide text-muted">
               <th className="px-3 py-2">Sr No.</th>
               <th className="px-3 py-2">Liability Type</th>
               <th className="px-3 py-2">Ownership</th>
@@ -203,7 +203,7 @@ export function OtherLiabilitiesTable({ readOnly = false, initialLiabilities }: 
             {items.map((l, idx) => {
               const rep = effectiveRepayment(l);
               return (
-                <tr key={l.id} className="row-hover border-b border-white/30 text-slate-800">
+                <tr key={l.id} className="row-hover border-b border-white/30 text-primary">
                   <td className="px-3 py-2">{idx + 1}</td>
                   <td className="px-3 py-2">{l.type.replace(/_/g, ' ')}</td>
                   <td className="px-3 py-2">{l.ownership || '—'}</td>
@@ -213,7 +213,7 @@ export function OtherLiabilitiesTable({ readOnly = false, initialLiabilities }: 
                   <td className="px-3 py-2">{l.interestRate != null ? pct(l.interestRate * 100) : '—'}</td>
                   <td className="px-3 py-2">
                     {money(rep.value)}
-                    {rep.assumed && <span className="ml-1 text-xs text-slate-400">(assumed {(CC_REPAYMENT_PCT * 100).toFixed(0)}% of limit)</span>}
+                    {rep.assumed && <span className="ml-1 text-xs text-faint">(assumed {(CC_REPAYMENT_PCT * 100).toFixed(0)}% of limit)</span>}
                   </td>
                   <td className="px-3 py-2">
                     <ToggleSwitch
@@ -226,14 +226,14 @@ export function OtherLiabilitiesTable({ readOnly = false, initialLiabilities }: 
                   {!readOnly && (
                     <td className="px-3 py-2 whitespace-nowrap">
                       <button onClick={() => openEdit(l)} className="mr-2 text-xs font-medium text-brand hover:underline">Edit</button>
-                      <button onClick={() => remove(l)} className="text-xs font-medium text-red-600 hover:underline">Delete</button>
+                      <button onClick={() => remove(l)} className="text-xs font-medium text-crimson hover:underline">Delete</button>
                     </td>
                   )}
                 </tr>
               );
             })}
             {items.length === 0 && (
-              <tr><td colSpan={readOnly ? 9 : 10} className="px-3 py-6 text-center text-sm text-slate-500">No liabilities yet.</td></tr>
+              <tr><td colSpan={readOnly ? 9 : 10} className="px-3 py-6 text-center text-sm text-muted">No liabilities yet.</td></tr>
             )}
           </tbody>
         </table>
@@ -267,7 +267,7 @@ export function OtherLiabilitiesTable({ readOnly = false, initialLiabilities }: 
               <input type="checkbox" checked={editing.includeInServicing !== false}
                 onChange={(e) => setEditing({ ...editing, includeInServicing: e.target.checked })}
                 className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" />
-              <span className="text-sm text-slate-700">Include in servicing</span>
+              <span className="text-sm text-secondary">Include in servicing</span>
             </label>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>

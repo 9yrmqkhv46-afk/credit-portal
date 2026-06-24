@@ -1,8 +1,91 @@
 @import "tailwindcss";
 
+/* ===========================================================================
+ * Apple visionOS "spatial glass" design system — DARK theme overhaul.
+ * ---------------------------------------------------------------------------
+ * Deep-space palette + 5-level glass material system + motion tokens. Tokens
+ * declared in @theme become Tailwind utilities automatically (bg-brand,
+ * text-primary, text-secondary, text-muted, text-faint, text-teal, text-gold,
+ * border-brand, ring-brand, bg-success, etc.). Plain CSS layers below provide
+ * the .glass-1..5 materials, the canvas-friendly backdrops, and the motion
+ * system. All non-essential motion is disabled under prefers-reduced-motion.
+ * ======================================================================== */
+
 :root {
-  --background: #eef2f4;
-  --foreground: #16252a;
+  /* Deep space base + light foreground. */
+  --background: #05070e;
+  --foreground: #eef2f8;
+
+  /* Deep space palette. */
+  --glass-void: #05070e;
+  --glass-void-2: #0a1020;
+
+  /* 5-level glass material system: bg / border / blur / shadow. */
+  --glass-1-bg: rgba(255, 255, 255, 0.03);
+  --glass-1-border: rgba(255, 255, 255, 0.06);
+  --glass-1-blur: 8px;
+  --glass-1-shadow: 0 4px 16px -10px rgba(0, 0, 0, 0.6);
+
+  --glass-2-bg: rgba(255, 255, 255, 0.05);
+  --glass-2-border: rgba(255, 255, 255, 0.09);
+  --glass-2-blur: 14px;
+  --glass-2-shadow: 0 10px 28px -14px rgba(0, 0, 0, 0.65);
+
+  --glass-3-bg: rgba(255, 255, 255, 0.07);
+  --glass-3-border: rgba(255, 255, 255, 0.12);
+  --glass-3-blur: 20px;
+  --glass-3-shadow: 0 16px 40px -18px rgba(0, 0, 0, 0.7);
+
+  --glass-4-bg: rgba(255, 255, 255, 0.10);
+  --glass-4-border: rgba(255, 255, 255, 0.16);
+  --glass-4-blur: 28px;
+  --glass-4-shadow: 0 22px 54px -22px rgba(0, 0, 0, 0.75);
+
+  --glass-5-bg: rgba(255, 255, 255, 0.14);
+  --glass-5-border: rgba(255, 255, 255, 0.22);
+  --glass-5-blur: 40px;
+  --glass-5-shadow: 0 30px 70px -26px rgba(0, 0, 0, 0.8);
+
+  /* Solid fallbacks used when backdrop-filter is unsupported. */
+  --glass-1-solid: #0c1322;
+  --glass-2-solid: #101829;
+  --glass-3-solid: #141d31;
+  --glass-4-solid: #19233a;
+  --glass-5-solid: #1e2a44;
+
+  /* Text tokens (WCAG-AA tuned on the glass surfaces). */
+  --text-primary: #f4f7fb;
+  --text-secondary: #c4cdda;
+  --text-muted: #8d99ab;
+  --text-faint: #616d7e;
+
+  /* Accents. */
+  --accent-teal: #00c4d4;
+  --accent-gold: #f0b429;
+  --accent-emerald: #00e587;
+  --accent-crimson: #ff4d6a;
+  --accent-sapphire: #3d8eff;
+
+  /* Motion — easings. */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-decel: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-accel: cubic-bezier(0.4, 0, 1, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  /* Motion — durations. */
+  --dur-instant: 80ms;
+  --dur-fast: 160ms;
+  --dur-base: 260ms;
+  --dur-slow: 420ms;
+  --dur-slower: 640ms;
+  --dur-cinematic: 1100ms;
+
+  /* Typography stacks. Fonts loaded via <link> in layout <head>; graceful
+     system fallback so the build/app never depends on the font CDN. */
+  --font-display: 'Cabinet Grotesk', 'Satoshi', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'Satoshi', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
 @theme inline {
@@ -10,64 +93,60 @@
   --color-foreground: var(--foreground);
 }
 
-/*
- * TransformBiz fintech palette.
- * ---------------------------------------------------------------------------
- * Defining these as `--color-*` tokens makes Tailwind v4 generate the matching
- * utilities automatically, e.g. bg-brand, text-brand, border-brand, ring-brand,
- * bg-brand-dark, bg-brand-light, hover:bg-brand-dark, focus:ring-brand,
- * bg-accent, text-gold, bg-success, etc.
- *
- * The primary is a refined deep teal/emerald. A complementary indigo accent and
- * a warm gold highlight round out a cohesive, modern scheme. Status colours and
- * a neutral slate scale are tuned for WCAG-ish contrast on light glass panels.
- */
 @theme {
-  /* Primary — deep teal / emerald */
-  --color-brand: #0e7068;
-  --color-brand-dark: #0a544e;
-  --color-brand-light: #e2f1ee;
-  --color-brand-50: #f0f8f6;
-  --color-brand-100: #d6ece8;
-  --color-brand-600: #0e7068;
-  --color-brand-700: #0b5b54;
+  /* Primary CTA — teal (maps the existing `brand` utilities onto the new accent). */
+  --color-brand: #00c4d4;
+  --color-brand-dark: #00a3b0;
+  --color-brand-light: #07313a;
+  --color-brand-50: #0a1f25;
+  --color-brand-100: #0c2a31;
+  --color-brand-600: #00c4d4;
+  --color-brand-700: #00919e;
 
-  /* Complementary accent — indigo */
-  --color-accent: #4f46e5;
-  --color-accent-dark: #4338ca;
-  --color-accent-light: #eef0ff;
+  /* Named accents. */
+  --color-teal: #00c4d4;
+  --color-gold: #f0b429;
+  --color-gold-light: #2e2510;
+  --color-emerald: #00e587;
+  --color-crimson: #ff4d6a;
+  --color-sapphire: #3d8eff;
 
-  /* Warm gold highlight (used sparingly) */
-  --color-gold: #b5830f;
-  --color-gold-light: #f7eecf;
+  /* Complementary accent — sapphire. */
+  --color-accent: #3d8eff;
+  --color-accent-dark: #2f6fd6;
+  --color-accent-light: #0f1f38;
 
-  /* Status */
-  --color-success: #0f9d6b;
-  --color-success-light: #dcf5ec;
-  --color-warning: #c98a00;
-  --color-warning-light: #fbf0d4;
-  --color-danger: #dc2626;
-  --color-danger-light: #fbe2e2;
+  /* Status. */
+  --color-success: #00e587;
+  --color-success-light: #0a2a20;
+  --color-warning: #f0b429;
+  --color-warning-light: #2e2510;
+  --color-danger: #ff4d6a;
+  --color-danger-light: #311018;
 
-  /* Neutral slate scale (mirrors Tailwind slate; tokenised for clarity) */
-  --color-ink: #0f2a2e;
-  --color-muted: #5b6b6e;
+  /* Text scale (generate text-primary / text-secondary / text-muted / text-faint). */
+  --color-primary: #f4f7fb;
+  --color-secondary: #c4cdda;
+  --color-muted: #8d99ab;
+  --color-faint: #616d7e;
+
+  --color-ink: #05070e;
+
+  /* Font family utilities (font-display / font-body / font-mono). */
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
 }
 
 html {
-  /* Smooth scroll + a sensible base for the glass background to sit on. */
-  background: var(--background);
+  background: var(--glass-void);
+  scroll-behavior: smooth;
 }
 
 body {
-  color: var(--foreground);
-  /*
-   * Strong system font stack — deliberately NOT using next/font/google so the
-   * production build never performs a network font fetch (which can fail on
-   * Render). Tightened tracking + antialiasing give a premium feel.
-   */
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, 'Noto Sans', sans-serif;
+  color: var(--text-primary);
+  background: var(--glass-void);
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   letter-spacing: -0.01em;
@@ -75,98 +154,101 @@ body {
 }
 
 h1, h2, h3, h4 {
+  font-family: var(--font-display);
   letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+/* All numerals (currency / % / dates) use the mono font with tabular figures. */
+.num,
+.tnum {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
 }
 
 /* ===========================================================================
- * Glassmorphism design system
- * ---------------------------------------------------------------------------
- * Reusable classes composed by components and pages. Defined as plain CSS in a
- * Tailwind v4 @layer so the utilities can still be overridden by Tailwind
- * classes when needed. Keep the number of large blurred layers reasonable for
- * performance; blur radius is reduced on small screens.
+ * Glass material system (.glass-1 .. .glass-5) + legacy aliases.
+ * Solid-colour fallback first; backdrop-filter applied only where supported.
  * ======================================================================== */
 @layer utilities {
-  /* Full-page layered gradient used as the app backdrop. */
-  .app-gradient {
-    background:
-      radial-gradient(1100px 600px at 12% -10%, rgba(14, 112, 104, 0.16), transparent 60%),
-      radial-gradient(900px 600px at 100% 0%, rgba(16, 185, 129, 0.10), transparent 55%),
-      radial-gradient(900px 700px at 50% 120%, rgba(79, 70, 229, 0.12), transparent 60%),
-      linear-gradient(160deg, #eef4f4 0%, #e8eef1 42%, #eef0f7 100%);
+  .glass-1, .glass-2, .glass-3, .glass-4, .glass-5 {
+    border-style: solid;
+    border-width: 1px;
+  }
+  .glass-1 { background-color: var(--glass-1-solid); border-color: var(--glass-1-border); box-shadow: var(--glass-1-shadow); }
+  .glass-2 { background-color: var(--glass-2-solid); border-color: var(--glass-2-border); box-shadow: var(--glass-2-shadow); }
+  .glass-3 { background-color: var(--glass-3-solid); border-color: var(--glass-3-border); box-shadow: var(--glass-3-shadow); }
+  .glass-4 { background-color: var(--glass-4-solid); border-color: var(--glass-4-border); box-shadow: var(--glass-4-shadow); }
+  .glass-5 { background-color: var(--glass-5-solid); border-color: var(--glass-5-border); box-shadow: var(--glass-5-shadow); }
+
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass-1 { background-color: var(--glass-1-bg); backdrop-filter: blur(var(--glass-1-blur)) saturate(150%); -webkit-backdrop-filter: blur(var(--glass-1-blur)) saturate(150%); }
+    .glass-2 { background-color: var(--glass-2-bg); backdrop-filter: blur(var(--glass-2-blur)) saturate(150%); -webkit-backdrop-filter: blur(var(--glass-2-blur)) saturate(150%); }
+    .glass-3 { background-color: var(--glass-3-bg); backdrop-filter: blur(var(--glass-3-blur)) saturate(160%); -webkit-backdrop-filter: blur(var(--glass-3-blur)) saturate(160%); }
+    .glass-4 { background-color: var(--glass-4-bg); backdrop-filter: blur(var(--glass-4-blur)) saturate(170%); -webkit-backdrop-filter: blur(var(--glass-4-blur)) saturate(170%); }
+    .glass-5 { background-color: var(--glass-5-bg); backdrop-filter: blur(var(--glass-5-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-5-blur)) saturate(180%); }
   }
 
-  /* Darker, cooler slate gradient for hero / admin surfaces. */
+  /* Inset highlight for the higher elevations (visionOS sheen). */
+  .glass-3, .glass-4, .glass-5 {
+    box-shadow: var(--glass-3-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  /* ---- Legacy class aliases retheme'd to dark glass so existing markup
+     (.glass, .glass-dark, .glass-nav, .glass-input, .app-gradient) adopts the
+     new system without per-element edits. ---- */
+  .app-gradient,
   .app-gradient-dark {
     background:
-      radial-gradient(1000px 600px at 10% -10%, rgba(44, 95, 102, 0.55), transparent 60%),
-      radial-gradient(900px 600px at 100% 10%, rgba(20, 60, 70, 0.55), transparent 55%),
-      radial-gradient(800px 700px at 60% 120%, rgba(30, 41, 59, 0.6), transparent 60%),
-      linear-gradient(160deg, #0f2429 0%, #15303a 45%, #1e293b 100%);
+      radial-gradient(1100px 700px at 12% -10%, rgba(0, 196, 212, 0.14), transparent 60%),
+      radial-gradient(900px 650px at 100% 0%, rgba(61, 142, 255, 0.12), transparent 55%),
+      radial-gradient(900px 800px at 50% 120%, rgba(240, 180, 41, 0.08), transparent 60%),
+      linear-gradient(160deg, #05070e 0%, #0a1020 55%, #0c1426 100%);
   }
 
-  /* Light frosted glass panel — dark text on translucent white. */
   .glass {
-    background-image: linear-gradient(160deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.52) 100%);
-    backdrop-filter: blur(20px) saturate(160%);
-    -webkit-backdrop-filter: blur(20px) saturate(160%);
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.6) inset,
-      0 18px 40px -20px rgba(11, 91, 84, 0.28),
-      0 4px 12px -8px rgba(15, 36, 41, 0.18);
+    background-color: var(--glass-3-solid);
+    border: 1px solid var(--glass-3-border);
+    box-shadow: var(--glass-3-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
-
-  /* Dark frosted glass — white text on translucent slate, for hero/admin. */
   .glass-dark {
-    background-color: rgba(15, 36, 41, 0.45);
-    backdrop-filter: blur(20px) saturate(140%);
-    -webkit-backdrop-filter: blur(20px) saturate(140%);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 12px 36px -12px rgba(0, 0, 0, 0.45);
+    background-color: var(--glass-4-solid);
+    border: 1px solid var(--glass-4-border);
+    box-shadow: var(--glass-4-shadow);
   }
-
-  /* Frosted nav/header bar. */
-  .glass-nav {
-    background-color: rgba(255, 255, 255, 0.65);
-    backdrop-filter: blur(16px) saturate(160%);
-    -webkit-backdrop-filter: blur(16px) saturate(160%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+  .glass-nav, .glass-nav-dark {
+    background-color: rgba(10, 16, 32, 0.62);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
-
-  .glass-nav-dark {
-    background-color: rgba(15, 36, 41, 0.6);
-    backdrop-filter: blur(16px) saturate(140%);
-    -webkit-backdrop-filter: blur(16px) saturate(140%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  }
-
-  /* Semi-transparent frosted form field. */
   .glass-input {
-    background-color: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+  }
+  .glass-input::placeholder { color: var(--text-faint); }
+
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass { background-color: var(--glass-3-bg); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); }
+    .glass-dark { background-color: var(--glass-4-bg); backdrop-filter: blur(28px) saturate(150%); -webkit-backdrop-filter: blur(28px) saturate(150%); }
+    .glass-nav, .glass-nav-dark { backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%); }
+    .glass-input { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
   }
 
-  /* Decorative blurred colour blobs sitting behind the glass. */
   .glass-blob {
     position: absolute;
     border-radius: 9999px;
-    filter: blur(70px);
-    opacity: 0.5;
+    filter: blur(80px);
+    opacity: 0.45;
     pointer-events: none;
   }
 
-  /* Reduce blur radius on small screens for performance + readability. */
   @media (max-width: 640px) {
-    .glass,
-    .glass-dark {
+    .glass, .glass-dark, .glass-1, .glass-2, .glass-3, .glass-4, .glass-5 {
       backdrop-filter: blur(14px) saturate(150%);
       -webkit-backdrop-filter: blur(14px) saturate(150%);
     }
-    .glass-blob {
-      filter: blur(48px);
-    }
+    .glass-blob { filter: blur(52px); }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -174,53 +256,80 @@ h1, h2, h3, h4 {
       transition-duration: 0.001ms !important;
       animation-duration: 0.001ms !important;
       animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
     }
-    .auth-glyph,
-    .auth-blob,
-    .auth-card,
-    .btn-shimmer::after {
+    .auth-glyph, .auth-blob, .auth-card, .btn-shimmer::after, .orbit, .toast {
       animation: none !important;
     }
   }
 }
 
 /* ===========================================================================
- * Animated auth scene (login / admin-login)
- * ---------------------------------------------------------------------------
- * Pure CSS keyframes (no JS animation libs). All motion is disabled under
- * prefers-reduced-motion via the block above.
+ * Spatial shell (sidebar + topbar)
  * ======================================================================== */
 @layer utilities {
-  /* Deep navy backdrop for the auth scene. */
+  .spatial-sidebar {
+    background-color: rgba(10, 16, 32, 0.66);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    transition: width var(--dur-slow) var(--ease-decel);
+  }
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .spatial-sidebar { backdrop-filter: blur(22px) saturate(150%); -webkit-backdrop-filter: blur(22px) saturate(150%); }
+  }
+  /* Sliding teal active-pill that tracks the active nav item. */
+  .nav-pill {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    border-radius: 0.75rem;
+    background: linear-gradient(135deg, rgba(0, 196, 212, 0.22), rgba(0, 196, 212, 0.10));
+    border: 1px solid rgba(0, 196, 212, 0.45);
+    box-shadow: 0 0 18px -4px rgba(0, 196, 212, 0.55);
+    transition: transform var(--dur-slow) var(--ease-spring), height var(--dur-base) var(--ease-decel), opacity var(--dur-base) ease;
+    pointer-events: none;
+  }
+  .collapse-btn svg { transition: transform var(--dur-base) var(--ease-standard); }
+  .collapse-btn[data-collapsed='true'] svg { transform: rotate(180deg); }
+
+  /* Focus-visible teal ring for accessibility. */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 196, 212, 0.45);
+    border-radius: 0.5rem;
+  }
+}
+
+/* ===========================================================================
+ * Animated auth scene (login / admin-login)
+ * ======================================================================== */
+@layer utilities {
   .auth-scene {
     background:
-      radial-gradient(900px 600px at 15% 10%, rgba(1, 105, 111, 0.30), transparent 60%),
-      radial-gradient(800px 600px at 85% 20%, rgba(209, 153, 0, 0.18), transparent 55%),
-      radial-gradient(900px 700px at 50% 110%, rgba(1, 105, 111, 0.22), transparent 60%),
-      #0a0f1e;
+      radial-gradient(900px 600px at 15% 10%, rgba(0, 196, 212, 0.20), transparent 60%),
+      radial-gradient(800px 600px at 85% 20%, rgba(61, 142, 255, 0.16), transparent 55%),
+      radial-gradient(900px 700px at 50% 110%, rgba(240, 180, 41, 0.10), transparent 60%),
+      #05070e;
   }
 
-  /* Faint blueprint grid overlay. */
   .auth-grid {
     background-image:
       linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-    background-size: 44px 44px;
+    background-size: 48px 48px;
     mask-image: radial-gradient(circle at 50% 40%, black 0%, transparent 80%);
     -webkit-mask-image: radial-gradient(circle at 50% 40%, black 0%, transparent 80%);
   }
 
-  /* Slowly drifting finance glyphs. */
   .auth-glyph {
     position: absolute;
     color: rgba(255, 255, 255, 0.10);
+    font-family: var(--font-mono);
     font-weight: 700;
     user-select: none;
     pointer-events: none;
     animation: authDrift 22s ease-in-out infinite;
   }
 
-  /* Soft pulsing radial blobs. */
   .auth-blob {
     position: absolute;
     border-radius: 9999px;
@@ -230,134 +339,116 @@ h1, h2, h3, h4 {
     animation: authPulse 9s ease-in-out infinite;
   }
 
-  /* Frosted card entrance: fade + slide + scale. */
   .auth-card {
-    animation: authCardIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: authCardIn 0.7s var(--ease-decel) both;
   }
 
-  /* Shimmer sweep on the primary button. */
-  .btn-shimmer {
-    position: relative;
-    overflow: hidden;
+  /* Orbiting finance-symbol pills around the login card. */
+  .orbit {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform-origin: 0 0;
+    animation: orbitSpin 26s linear infinite;
   }
+  .orbit-arm {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+  .orbit-pill {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.6rem;
+    border-radius: 9999px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: rgba(0, 196, 212, 0.9);
+    background: rgba(0, 196, 212, 0.08);
+    border: 1px solid rgba(0, 196, 212, 0.30);
+    white-space: nowrap;
+    transform: translate(-50%, -50%);
+    animation: orbitCounter 26s linear infinite;
+  }
+
+  .btn-shimmer { position: relative; overflow: hidden; }
   .btn-shimmer::after {
     content: '';
     position: absolute;
-    top: 0;
-    left: -150%;
-    width: 60%;
-    height: 100%;
-    background: linear-gradient(
-      120deg,
-      transparent,
-      rgba(255, 255, 255, 0.35),
-      transparent
-    );
+    top: 0; left: -150%;
+    width: 60%; height: 100%;
+    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.35), transparent);
     animation: authShimmer 2.8s ease-in-out infinite;
   }
 
-  /* Horizontal wiggle for invalid submit. */
-  .auth-wiggle {
-    animation: authWiggle 0.4s ease-in-out;
-  }
-
-  /* Success lift + fade before route change. */
-  .auth-success {
-    animation: authSuccess 0.5s ease forwards;
-  }
+  .auth-wiggle { animation: authWiggle 0.4s ease-in-out; }
+  .auth-success { animation: authSuccess 0.5s ease forwards; }
 }
 
 @keyframes authDrift {
-  0%   { transform: translate(0, 0) rotate(0deg); }
-  50%  { transform: translateY(-22px) rotate(8deg); }
+  0% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translateY(-22px) rotate(8deg); }
   100% { transform: translate(0, 0) rotate(0deg); }
 }
-
 @keyframes authPulse {
-  0%, 100% { transform: scale(1);   opacity: 0.40; }
-  50%      { transform: scale(1.15); opacity: 0.60; }
+  0%, 100% { transform: scale(1); opacity: 0.40; }
+  50% { transform: scale(1.15); opacity: 0.60; }
 }
-
 @keyframes authCardIn {
-  from { opacity: 0; transform: translateY(24px) scale(0.96); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(24px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
-
 @keyframes authShimmer {
-  0%   { left: -150%; }
-  60%  { left: 150%; }
+  0% { left: -150%; }
+  60% { left: 150%; }
   100% { left: 150%; }
 }
-
 @keyframes authWiggle {
   0%, 100% { transform: translateX(0); }
-  20%      { transform: translateX(-8px); }
-  40%      { transform: translateX(8px); }
-  60%      { transform: translateX(-5px); }
-  80%      { transform: translateX(5px); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
 }
-
 @keyframes authSuccess {
   to { opacity: 0; transform: translateY(-16px) scale(0.98); }
 }
-
+@keyframes orbitSpin { to { transform: rotate(360deg); } }
+@keyframes orbitCounter { to { transform: rotate(-360deg); } }
 
 /* ===========================================================================
- * Motion system (dashboard / profile)
- * ---------------------------------------------------------------------------
- * Tasteful, performant CSS-only motion. Entrance reveals, hover micro-
- * interactions, animated toggles and collapsibles. All non-essential motion is
- * disabled by the prefers-reduced-motion block above (it zeroes animation +
- * transition durations globally, so every reveal simply snaps to its final,
- * fully-visible state).
+ * Motion system (entrance reveals, hover, toggles, collapsibles, toasts)
  * ======================================================================== */
 @layer utilities {
-  /* Section / card entrance: fade + slide-up. Pair with inline
-     style={{ animationDelay }} to stagger a list of children. */
-  .animate-enter {
-    animation: fadeSlideUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
+  .animate-enter { animation: fadeSlideUp 0.55s var(--ease-decel) both; }
+  .animate-pop { animation: popIn 0.45s var(--ease-spring) both; }
 
-  /* Pop entrance for compact elements (badges, result numbers). */
-  .animate-pop {
-    animation: popIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  }
-
-  /* Generic hover lift for interactive cards / rows / list items. */
   .hover-lift {
-    transition: transform 0.25s ease, box-shadow 0.25s ease, background-color 0.2s ease;
+    transition: transform var(--dur-base) var(--ease-decel), box-shadow var(--dur-base) ease, background-color var(--dur-fast) ease;
     will-change: transform;
   }
   .hover-lift:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 16px 34px -18px rgba(11, 91, 84, 0.4);
+    transform: translateY(-3px);
+    box-shadow: var(--glass-4-shadow), 0 0 24px -8px rgba(0, 196, 212, 0.35);
+    background-color: var(--glass-4-bg);
   }
 
-  /* Subtle row highlight for table rows. */
-  .row-hover {
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
-  }
-  .row-hover:hover {
-    background-color: rgba(14, 112, 104, 0.06);
-  }
+  .row-hover { transition: background-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease; }
+  .row-hover:hover { background-color: rgba(0, 196, 212, 0.07); }
 
-  /* Smooth height expand/collapse using the grid 0fr -> 1fr technique. */
   .collapsible {
     display: grid;
     grid-template-rows: 0fr;
-    transition: grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.32s ease;
+    transition: grid-template-rows var(--dur-slow) var(--ease-decel), opacity var(--dur-slow) ease;
     opacity: 0;
   }
-  .collapsible.is-open {
-    grid-template-rows: 1fr;
-    opacity: 1;
-  }
-  .collapsible > .collapsible-inner {
-    overflow: hidden;
-    min-height: 0;
-  }
+  .collapsible.is-open { grid-template-rows: 1fr; opacity: 1; }
+  .collapsible > .collapsible-inner { overflow: hidden; min-height: 0; }
 
-  /* Animated toggle switch (Include in servicing). */
+  /* Animated toggle switch — teal glow when on. */
   .switch {
     position: relative;
     display: inline-flex;
@@ -367,21 +458,16 @@ h1, h2, h3, h4 {
     cursor: pointer;
     align-items: center;
     border-radius: 9999px;
-    background-color: #cbd5e1;
-    transition: background-color 0.28s ease, box-shadow 0.28s ease;
-    border: 1px solid rgba(15, 36, 41, 0.08);
+    background-color: rgba(255, 255, 255, 0.12);
+    transition: background-color var(--dur-base) ease, box-shadow var(--dur-base) ease;
+    border: 1px solid rgba(255, 255, 255, 0.12);
   }
-  .switch:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(14, 112, 104, 0.35);
-  }
+  .switch:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0, 196, 212, 0.45); }
   .switch[data-on='true'] {
-    background-image: linear-gradient(135deg, var(--color-brand), var(--color-brand-dark));
+    background-image: linear-gradient(135deg, var(--accent-teal), var(--color-brand-dark));
+    box-shadow: 0 0 16px -2px rgba(0, 196, 212, 0.6);
   }
-  .switch[disabled] {
-    cursor: not-allowed;
-    opacity: 0.55;
-  }
+  .switch[disabled] { cursor: not-allowed; opacity: 0.55; }
   .switch-thumb {
     position: absolute;
     left: 2px;
@@ -389,23 +475,17 @@ h1, h2, h3, h4 {
     width: 1.15rem;
     border-radius: 9999px;
     background: #ffffff;
-    box-shadow: 0 1px 3px rgba(15, 36, 41, 0.35);
-    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    transition: transform var(--dur-base) var(--ease-spring);
   }
-  .switch[data-on='true'] .switch-thumb {
-    transform: translateX(1.25rem);
-  }
+  .switch[data-on='true'] .switch-thumb { transform: translateX(1.25rem); }
 
-  /* Bar that animates its fill width from 0 on mount. */
-  .bar-fill {
-    transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
-  }
+  .bar-fill { transition: width 0.9s var(--ease-decel); }
 
-  /* Loading skeleton shimmer. */
   .skeleton {
     position: relative;
     overflow: hidden;
-    background: rgba(148, 163, 184, 0.22);
+    background: rgba(255, 255, 255, 0.06);
     border-radius: 0.5rem;
   }
   .skeleton::after {
@@ -413,21 +493,32 @@ h1, h2, h3, h4 {
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
     animation: skeletonSweep 1.4s ease-in-out infinite;
   }
+
+  /* Glass toast (accent left-bar + shrinking progress). */
+  .toast {
+    animation: toastIn var(--dur-slow) var(--ease-spring) both;
+  }
+  .toast-out { animation: toastOut var(--dur-base) var(--ease-accel) both; }
+  .toast-progress { transform-origin: left center; animation: toastProgress linear forwards; }
 }
 
 @keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(16px); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
-
 @keyframes popIn {
   from { opacity: 0; transform: scale(0.92); }
-  to   { opacity: 1; transform: scale(1); }
+  to { opacity: 1; transform: scale(1); }
 }
-
-@keyframes skeletonSweep {
-  100% { transform: translateX(100%); }
+@keyframes skeletonSweep { 100% { transform: translateX(100%); } }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(40px) scale(0.96); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
 }
+@keyframes toastOut {
+  to { opacity: 0; transform: translateX(40px) scale(0.96); }
+}
+@keyframes toastProgress { from { transform: scaleX(1); } to { transform: scaleX(0); } }

@@ -88,6 +88,8 @@ export interface RentalEstimateResult {
   rentalRangeHigh?: number | null;
   /** Provider confidence indicator (string label or numeric score). */
   confidence?: string | number | null;
+  /** Normalized property address echoed back by the provider, when present. */
+  address?: string | null;
   /** Human-readable note for the UI (e.g. why it's not configured). */
   message?: string;
   /** Error detail for graceful failures (missing key, non-200, timeout). */
@@ -286,6 +288,11 @@ export async function getRentalEstimate(query: RentalEstimateQuery): Promise<Ren
 
 const APIFY_BASE = 'https://api.apify.com/v2';
 const APIFY_TIMEOUT_MS = 60_000;
+/** Default Apify actor for realestate.com.au valuations (overridable via env). */
+const DEFAULT_APIFY_ACTOR_ID = 'abotapi~realestate-au-scraper';
+/** Async-mode polling cadence + ceiling. */
+const APIFY_POLL_INTERVAL_MS = 2_000;
+const APIFY_ASYNC_MAX_MS = 90_000;
 
 /** Normalize the first Apify dataset item into our stable estimate shape. */
 function normalizeApify(item: Record<string, unknown> | undefined): RentalEstimateResult {
@@ -297,15 +304,19 @@ function normalizeApify(item: Record<string, unknown> | undefined): RentalEstima
       error: 'Apify run returned no dataset items.',
     };
   }
+  // Map likely value fields defensively (the actor schema is not guaranteed).
   const value = toNumberOrNull(
-    pick(item, ['estimatedValue', 'value', 'price', 'estimate', 'salePrice', 'avm'])
+    pick(item, ['estimatedValue', 'value', 'price', 'priceEstimate', 'estimate', 'salePrice', 'avm', 'valuation'])
   );
   const weekly = toNumberOrNull(
-    pick(item, ['rentalEstimateWeekly', 'weeklyRent', 'rentPerWeek', 'rent', 'rentEstimate', 'weekly'])
+    pick(item, [
+      'rentalEstimateWeekly', 'weeklyRent', 'rentPerWeek', 'rent', 'rentEstimate', 'rentalEstimate', 'weekly',
+    ])
   );
-  const low = toNumberOrNull(pick(item, ['rentalRangeLow', 'rentLow', 'lowerRange', 'low']));
-  const high = toNumberOrNull(pick(item, ['rentalRangeHigh', 'rentHigh', 'upperRange', 'high']));
+  const low = toNumberOrNull(pick(item, ['rentalRangeLow', 'rentLow', 'lowerRange', 'priceLow', 'low']));
+  const high = toNumberOrNull(pick(item, ['rentalRangeHigh', 'rentHigh', 'upperRange', 'priceHigh', 'high']));
   const confidenceRaw = pick(item, ['confidence', 'confidenceLevel', 'score']);
+  const address = pick(item, ['address', 'displayAddress', 'fullAddress', 'streetAddress']);
   return {
     provider: 'apify',
     configured: true,
@@ -315,19 +326,35 @@ function normalizeApify(item: Record<string, unknown> | undefined): RentalEstima
     rentalRangeLow: low,
     rentalRangeHigh: high,
     confidence: (confidenceRaw as string | number | undefined) ?? null,
+    address: typeof address === 'string' ? address : undefined,
     raw: item,
   };
 }
 
 /**
- * Run an Apify actor/task synchronously and normalize the first dataset item.
- * Never throws: missing token/actor, non-200 and timeout return a graceful
- * result. The token is sent as a query param (never logged).
+ * Run an Apify actor/task and normalize the first dataset item.
+ *
+ * Run mode is controlled by APIFY_RUN_MODE (sync | async, default sync):
+ *   - sync  -> POST /run-sync-get-dataset-items (one call, returns items)
+ *   - async -> POST /runs, poll the run until it finishes, then GET the
+ *              default dataset items.
+ *
+ * The actor id comes from APIFY_ACTOR_ID (default `abotapi~realestate-au-scraper`);
+ * if only APIFY_TASK_ID is set, the actor-tasks route is used instead. The
+ * token is supplied via APIFY_TOKEN and only ever sent as a query param (never
+ * logged). The actor INPUT is built flexibly (address parts + a realestate.com.au
+ * searchUrl + startUrls) so it works across likely actor input schemas.
+ *
+ * Never throws: missing token, non-200, empty dataset and timeout all return a
+ * graceful result so the server stays up.
  */
 export async function getApifyEstimate(query: RentalEstimateQuery): Promise<RentalEstimateResult> {
   const token = process.env.APIFY_TOKEN;
-  const actorId = process.env.APIFY_ACTOR_ID;
+  const explicitActorId = process.env.APIFY_ACTOR_ID;
   const taskId = process.env.APIFY_TASK_ID;
+  // Default to the realestate-au actor ONLY when neither an explicit actor nor
+  // a saved task is configured, so an APIFY_TASK_ID-only setup still works.
+  const actorId = explicitActorId || (taskId ? undefined : DEFAULT_APIFY_ACTOR_ID);
   const resourceId = actorId || taskId;
 
   if (!token || !resourceId) {
@@ -336,16 +363,20 @@ export async function getApifyEstimate(query: RentalEstimateQuery): Promise<Rent
       configured: false,
       source: 'apify',
       message:
-        'Apify not configured (APIFY_TOKEN and APIFY_ACTOR_ID/APIFY_TASK_ID required). Use the realestate.com.au link or enter values manually.',
+        'Apify not configured (APIFY_TOKEN required; APIFY_ACTOR_ID defaults to ' +
+        `${DEFAULT_APIFY_ACTOR_ID}). Use the realestate.com.au link or enter values manually.`,
     };
   }
 
-  // Prefer an explicit actor id; otherwise use the task route.
+  // Prefer an explicit/default actor id; otherwise use the task route.
   const resourcePath = actorId
     ? `acts/${encodeURIComponent(actorId)}`
     : `actor-tasks/${encodeURIComponent(taskId as string)}`;
-  const url = `${APIFY_BASE}/${resourcePath}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
 
+  // Build a realestate.com.au search URL from the address + postcode and pass a
+  // flexible input that covers common actor schemas (free-text address parts,
+  // a searchUrl, and a startUrls array).
+  const searchUrl = buildRealestateLink({ address: query.address, postcode: query.postcode ?? null });
   const input = {
     address: query.address,
     postcode: query.postcode ?? undefined,
@@ -355,29 +386,17 @@ export async function getApifyEstimate(query: RentalEstimateQuery): Promise<Rent
     bedrooms: query.bedrooms ?? undefined,
     bathrooms: query.bathrooms ?? undefined,
     carspaces: query.carspaces ?? undefined,
+    searchUrl,
+    startUrls: [{ url: searchUrl }],
   };
 
+  const runMode = (process.env.APIFY_RUN_MODE || 'sync').toLowerCase();
+
   try {
-    const res = await fetchWithTimeout(
-      url,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(input),
-      },
-      APIFY_TIMEOUT_MS
-    );
-    if (!res.ok) {
-      return {
-        provider: 'apify',
-        configured: true,
-        source: 'apify',
-        error: `Apify responded with HTTP ${res.status}.`,
-      };
+    if (runMode === 'async') {
+      return await runApifyAsync(resourcePath, token, input);
     }
-    const items = (await res.json()) as unknown;
-    const first = Array.isArray(items) ? (items[0] as Record<string, unknown> | undefined) : undefined;
-    return normalizeApify(first);
+    return await runApifySync(resourcePath, token, input);
   } catch (err) {
     const aborted = err instanceof Error && err.name === 'AbortError';
     return {
@@ -387,6 +406,90 @@ export async function getApifyEstimate(query: RentalEstimateQuery): Promise<Rent
       error: aborted ? 'Apify request timed out.' : 'Apify request failed.',
     };
   }
+}
+
+/** Synchronous run: one call returns the dataset items directly. */
+async function runApifySync(
+  resourcePath: string,
+  token: string,
+  input: Record<string, unknown>
+): Promise<RentalEstimateResult> {
+  const url = `${APIFY_BASE}/${resourcePath}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(input),
+    },
+    APIFY_TIMEOUT_MS
+  );
+  if (!res.ok) {
+    return { provider: 'apify', configured: true, source: 'apify', error: `Apify responded with HTTP ${res.status}.` };
+  }
+  const items = (await res.json()) as unknown;
+  const first = Array.isArray(items) ? (items[0] as Record<string, unknown> | undefined) : undefined;
+  return normalizeApify(first);
+}
+
+/**
+ * Asynchronous run: start the run, poll until it finishes, then fetch the
+ * default dataset items. All requests carry the token query param only.
+ */
+async function runApifyAsync(
+  resourcePath: string,
+  token: string,
+  input: Record<string, unknown>
+): Promise<RentalEstimateResult> {
+  const startUrl = `${APIFY_BASE}/${resourcePath}/runs?token=${encodeURIComponent(token)}`;
+  const startRes = await fetchWithTimeout(
+    startUrl,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(input),
+    },
+    APIFY_TIMEOUT_MS
+  );
+  if (!startRes.ok) {
+    return { provider: 'apify', configured: true, source: 'apify', error: `Apify responded with HTTP ${startRes.status}.` };
+  }
+  const started = (await startRes.json()) as { data?: { id?: string; defaultDatasetId?: string } };
+  const runId = started?.data?.id;
+  let datasetId = started?.data?.defaultDatasetId;
+  if (!runId) {
+    return { provider: 'apify', configured: true, source: 'apify', error: 'Apify run did not start.' };
+  }
+
+  // Poll the run status until it terminates or we hit the async ceiling.
+  const deadline = Date.now() + APIFY_ASYNC_MAX_MS;
+  let status = 'RUNNING';
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, APIFY_POLL_INTERVAL_MS));
+    const statusUrl = `${APIFY_BASE}/actor-runs/${encodeURIComponent(runId)}?token=${encodeURIComponent(token)}`;
+    const statusRes = await fetchWithTimeout(statusUrl, { method: 'GET', headers: { Accept: 'application/json' } }, APIFY_TIMEOUT_MS);
+    if (!statusRes.ok) continue;
+    const body = (await statusRes.json()) as { data?: { status?: string; defaultDatasetId?: string } };
+    status = body?.data?.status || status;
+    if (body?.data?.defaultDatasetId) datasetId = body.data.defaultDatasetId;
+    if (status === 'SUCCEEDED' || status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') break;
+  }
+
+  if (status !== 'SUCCEEDED') {
+    return { provider: 'apify', configured: true, source: 'apify', error: `Apify run did not succeed (status ${status}).` };
+  }
+  if (!datasetId) {
+    return { provider: 'apify', configured: true, source: 'apify', error: 'Apify run produced no dataset.' };
+  }
+
+  const itemsUrl = `${APIFY_BASE}/datasets/${encodeURIComponent(datasetId)}/items?token=${encodeURIComponent(token)}`;
+  const itemsRes = await fetchWithTimeout(itemsUrl, { method: 'GET', headers: { Accept: 'application/json' } }, APIFY_TIMEOUT_MS);
+  if (!itemsRes.ok) {
+    return { provider: 'apify', configured: true, source: 'apify', error: `Apify dataset fetch failed (HTTP ${itemsRes.status}).` };
+  }
+  const items = (await itemsRes.json()) as unknown;
+  const first = Array.isArray(items) ? (items[0] as Record<string, unknown> | undefined) : undefined;
+  return normalizeApify(first);
 }
 
 // ---------------------------------------------------------------------------

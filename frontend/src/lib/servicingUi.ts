@@ -33,6 +33,7 @@ export const FREQUENCY_OPTIONS = [
   { value: 'WEEKLY', label: 'Weekly' },
   { value: 'FORTNIGHTLY', label: 'Fortnightly' },
   { value: 'MONTHLY', label: 'Monthly' },
+  { value: 'QUARTERLY', label: 'Quarterly' },
   { value: 'ANNUAL', label: 'Annual' },
 ];
 
