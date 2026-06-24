@@ -36,6 +36,20 @@ function optNum(v: unknown): number | undefined {
 
 type EditableProperty = Partial<Property> & { type: PropertyType; address: string; estimatedValue: number };
 
+/** Normalized estimate returned by GET /api/valuation/estimate. */
+interface RentalEstimateResult {
+  provider: string;
+  configured: boolean;
+  source: string;
+  estimatedValue?: number | null;
+  rentalEstimateWeekly?: number | null;
+  rentalRangeLow?: number | null;
+  rentalRangeHigh?: number | null;
+  confidence?: string | number | null;
+  message?: string;
+  error?: string;
+}
+
 const EMPTY_PROPERTY: EditableProperty = {
   type: 'INVESTMENT', address: '', estimatedValue: 0, postcode: '', purchasePrice: null,
   purchaseDate: null, rentalIncomeAmount: null, rentalIncomeFrequency: 'WEEKLY',
@@ -108,6 +122,11 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Automated rental-estimate state (Domain AVM / Apify, via /valuation/estimate).
+  const [estimate, setEstimate] = useState<RentalEstimateResult | null>(null);
+  const [estimating, setEstimating] = useState(false);
+  const [estimateMsg, setEstimateMsg] = useState('');
+
   // Recalc state
   const [ratePct, setRatePct] = useState('6');
   const [recalcResult, setRecalcResult] = useState<ServicingCalcResult | null>(null);
@@ -174,6 +193,8 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
     setEditing({ ...EMPTY_PROPERTY });
     setEditId(null);
     setError('');
+    setEstimate(null);
+    setEstimateMsg('');
     setModalOpen(true);
   }
 
@@ -193,7 +214,66 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
     });
     setEditId(p.id);
     setError('');
+    setEstimate(null);
+    setEstimateMsg('');
     setModalOpen(true);
+  }
+
+  /** Fetch an automated rental estimate from the configured provider (Domain
+   * AVM / Apify) for the address+postcode currently in the form. Falls back
+   * gracefully to a message when the provider is not configured or errors. */
+  async function fetchRentalEstimate() {
+    setEstimating(true);
+    setEstimate(null);
+    setEstimateMsg('');
+    try {
+      const res = await api.get('/valuation/estimate', {
+        params: {
+          address: editing.address,
+          postcode: editing.postcode || '',
+          propertyType: editing.type,
+        },
+      });
+      const data = res.data as RentalEstimateResult;
+      if (!data || data.configured === false) {
+        setEstimateMsg(
+          data?.message ||
+            'Automated estimate not configured. Use the realestate.com.au link and enter the rent manually.'
+        );
+        return;
+      }
+      if (data.error) {
+        setEstimateMsg(data.error);
+        return;
+      }
+      if (data.rentalEstimateWeekly == null && data.estimatedValue == null) {
+        setEstimateMsg('No estimate returned for this address. Enter the rent manually.');
+        return;
+      }
+      setEstimate(data);
+    } catch {
+      setEstimateMsg(
+        'Unable to fetch an estimate right now. Use the realestate.com.au link and enter the rent manually.'
+      );
+    } finally {
+      setEstimating(false);
+    }
+  }
+
+  /** Apply the fetched estimate into the form fields (broker can still edit). */
+  function applyEstimate() {
+    if (!estimate) return;
+    setEditing((e) => {
+      const next = { ...e };
+      if (estimate.rentalEstimateWeekly != null) {
+        next.rentalIncomeAmount = estimate.rentalEstimateWeekly;
+        next.rentalIncomeFrequency = 'WEEKLY';
+      }
+      if (estimate.estimatedValue != null) {
+        next.estimatedValue = estimate.estimatedValue;
+      }
+      return next;
+    });
   }
 
   async function saveProperty() {
@@ -426,13 +506,53 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
                 onChange={(e) => setEditing({ ...editing, address: e.target.value })} />
               <Input label="Postcode" value={editing.postcode || ''}
                 onChange={(e) => setEditing({ ...editing, postcode: e.target.value })} />
-              <div className="flex items-end">
+              <div className="col-span-2 flex flex-wrap items-end gap-2">
                 <Button variant="secondary" size="sm" type="button"
                   onClick={() => openValuationLink(editing.address, editing.postcode)}
                   disabled={!editing.address}>
                   Find valuation on realestate.com.au
                 </Button>
+                <Button variant="secondary" size="sm" type="button"
+                  onClick={fetchRentalEstimate} loading={estimating}
+                  disabled={!editing.address && !editing.postcode}>
+                  Get rental estimate
+                </Button>
               </div>
+              {(estimate || estimateMsg) && (
+                <div className="col-span-2">
+                  {estimate ? (
+                    <Alert variant="info">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm">
+                          {estimate.rentalEstimateWeekly != null && (
+                            <p className="font-semibold">
+                              Estimated rent: {money(estimate.rentalEstimateWeekly)} p.w
+                              {(estimate.rentalRangeLow != null || estimate.rentalRangeHigh != null) && (
+                                <span className="font-normal text-slate-600">
+                                  {' '}(range {money(estimate.rentalRangeLow)} – {money(estimate.rentalRangeHigh)})
+                                </span>
+                              )}
+                            </p>
+                          )}
+                          {estimate.estimatedValue != null && (
+                            <p className="font-semibold">Estimated value: {money(estimate.estimatedValue)}</p>
+                          )}
+                          <p className="text-xs text-slate-500">
+                            Source: {estimate.source}
+                            {estimate.confidence != null && ` · confidence: ${estimate.confidence}`}
+                            {' '}· an estimate only; you can edit before saving.
+                          </p>
+                        </div>
+                        <Button variant="primary" size="sm" type="button" onClick={applyEstimate}>
+                          Use this
+                        </Button>
+                      </div>
+                    </Alert>
+                  ) : (
+                    <p className="text-xs text-slate-500">{estimateMsg}</p>
+                  )}
+                </div>
+              )}
               <Input label="Purchase price" type="number" min="0" value={String(editing.purchasePrice ?? '')}
                 onChange={(e) => setEditing({ ...editing, purchasePrice: e.target.value === '' ? null : parseFloat(e.target.value) })} />
               <Input label="Purchase date" type="date" value={editing.purchaseDate || ''}

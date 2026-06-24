@@ -163,8 +163,13 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `PORT`         | Port the API server listens on       | `3001`                              |
 | `NODE_ENV`     | Environment mode                     | `development`                       |
 | `FRONTEND_URL` | Frontend origin used for the CORS allow-list | `http://localhost:3000`      |
-| `VALUATION_PROVIDER` | Property valuation provider: `manual` \| `realestate_link` \| `external` | `manual` |
-| `VALUATION_API_KEY` | API key for a future paid valuation provider (never commit a real key) | _(unset)_ |
+| `VALUATION_PROVIDER` | Valuation provider: `manual` \| `realestate_link` \| `domain_avm` \| `apify` \| `external` | `manual` |
+| `DOMAIN_API_KEY` | Domain Group developer key (enables `domain_avm`). Never commit a real key | _(unset)_ |
+| `DOMAIN_API_BASE` | Domain API base URL | `https://api.domain.com.au` |
+| `DOMAIN_API_KEY_HEADER` | Header used to send the Domain key (`X-Api-Key` or `Authorization`) | `X-Api-Key` |
+| `APIFY_TOKEN` | Apify API token (enables `apify`). Never commit a real token | _(unset)_ |
+| `APIFY_ACTOR_ID` / `APIFY_TASK_ID` | Apify actor (or saved task) to run for estimates | _(unset)_ |
+| `VALUATION_API_KEY` | Legacy key for the `external` placeholder provider | _(unset)_ |
 
 ### Frontend (`frontend/.env.local`)
 
@@ -274,6 +279,60 @@ All endpoints require ADMIN role.
 |--------|-------------------------------------------------|------|--------------------------------------------------------|
 | GET    | `/api/valuation/link?address=..&postcode=..`    | No   | Returns a realestate.com.au search/estimate URL (JSON) |
 | GET    | `/api/valuation/link?...&redirect=1`            | No   | 302-redirects to that realestate.com.au URL            |
+| GET    | `/api/valuation/estimate?address=..&postcode=..&suburb=..&state=..&propertyType=..&bedrooms=..&bathrooms=..&carspaces=..` | Yes | Runs the configured automated provider and returns a normalized estimate |
+
+#### Automated rental/value estimates
+
+The `/api/valuation/estimate` endpoint runs whichever provider is selected by
+the `VALUATION_PROVIDER` env var and returns a **normalized JSON** shape:
+
+```jsonc
+{
+  "provider": "domain_avm",
+  "configured": true,
+  "source": "domain",
+  "rentalEstimateWeekly": 650,   // Domain returns a WEEKLY RENT estimate
+  "rentalRangeLow": 600,
+  "rentalRangeHigh": 700,
+  "confidence": "HIGH",
+  "estimatedValue": null         // populated by value-capable providers (Apify)
+}
+```
+
+When the provider is `manual` / `realestate_link` (or a key is missing) it
+returns `{ "provider", "configured": false, "message" }` so the UI **falls back
+to the realestate.com.au link button + manual entry**. Errors (non-200,
+timeout) return `{ "configured": true, "error" }` and never crash the server.
+The API key is never logged or returned.
+
+**Enable Domain Rental AVM (`domain_avm`):**
+
+1. Create a developer account and key at
+   [developer.domain.com.au](https://developer.domain.com.au) and subscribe to
+   the Rental AVM package
+   ([`Properties_GetRentalEstimate`](https://developer.domain.com.au/docs/latest/apis/pkg_rental_avm/references/properties_getrentalestimate)).
+2. On Render, set `VALUATION_PROVIDER=domain_avm` and `DOMAIN_API_KEY=<your key>`
+   on the backend service. Optionally set `DOMAIN_API_KEY_HEADER=Authorization`
+   to send the key as a Bearer token, or `DOMAIN_API_BASE` /
+   `DOMAIN_RENTAL_ESTIMATE_PATH` to override the endpoint.
+3. Domain's package is a **rental** AVM — it pre-fills the property's *Rent p.w*
+   suggestion, not the sale value. The broker reviews and accepts it via the
+   **"Use this"** button; manual entry stays the source of truth for the engine.
+
+**Enable Apify (`apify`):**
+
+1. Get an Apify token and choose an actor (or saved task) that accepts an
+   address/postcode input and outputs a value and/or rent field.
+2. On Render, set `VALUATION_PROVIDER=apify`, `APIFY_TOKEN=<token>` and either
+   `APIFY_ACTOR_ID=username~actor-name` or `APIFY_TASK_ID=<task>`. This is a
+   generic connector that calls Apify's run-sync-get-dataset-items endpoint and
+   normalizes the first dataset item.
+
+> **Note on the build sandbox:** external calls to `api.domain.com.au` /
+> `api.apify.com` require an API key and outbound network egress, which exist on
+> the Render deployment but **not** in the build sandbox. The providers were
+> verified with mocked HTTP in unit tests (`src/__tests__/valuation.test.ts`);
+> live calls run only on Render.
 
 ## Calculator Logic
 
