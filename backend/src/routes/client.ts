@@ -394,6 +394,15 @@ const propertySchema = z.object({
   valuationDate: z.string().nullable().optional(),
   ownership: z.string().nullable().optional(),
   includeInServicing: z.boolean().optional(),
+
+  // --- Optional inline existing-loan fields (nullable columns) ---
+  existingHomeLoanId: z.string().nullable().optional(),
+  loanAmount: z.number().min(0).nullable().optional(),
+  remainingLoanAmount: z.number().min(0).nullable().optional(),
+  loanTermRemainingYears: z.number().min(0).nullable().optional(),
+  currentBank: z.string().nullable().optional(),
+  loanInterestRate: z.number().min(0).nullable().optional(),
+  loanMonthlyRepayment: z.number().min(0).nullable().optional(),
 });
 
 /** Convert the optional date strings in a property payload to Date objects. */

@@ -163,6 +163,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `PORT`         | Port the API server listens on       | `3001`                              |
 | `NODE_ENV`     | Environment mode                     | `development`                       |
 | `FRONTEND_URL` | Frontend origin used for the CORS allow-list | `http://localhost:3000`      |
+| `VALUATION_PROVIDER` | Property valuation provider: `manual` \| `realestate_link` \| `external` | `manual` |
+| `VALUATION_API_KEY` | API key for a future paid valuation provider (never commit a real key) | _(unset)_ |
 
 ### Frontend (`frontend/.env.local`)
 
@@ -265,6 +267,13 @@ All endpoints require ADMIN role.
 | GET    | `/api/admin/clients/:id`          | Get full client detail     |
 | POST   | `/api/admin/clients/:id/notes`    | Add note to client         |
 | PATCH  | `/api/admin/clients/:id/status`   | Update client status       |
+
+### Property valuation (`/api/valuation`)
+
+| Method | Path                                            | Auth | Description                                            |
+|--------|-------------------------------------------------|------|--------------------------------------------------------|
+| GET    | `/api/valuation/link?address=..&postcode=..`    | No   | Returns a realestate.com.au search/estimate URL (JSON) |
+| GET    | `/api/valuation/link?...&redirect=1`            | No   | 302-redirects to that realestate.com.au URL            |
 
 ## Calculator Logic
 
@@ -659,3 +668,86 @@ query-engine binary; production uses the standard engine, which Render downloads
 during build). New optional columns are nullable (`?`) and their Zod schemas use
 `.nullable().optional()`; required columns stay required — keeping `tsc` happy on
 Render.
+
+
+### `calculateServicing` — the single servicing entry point
+
+The engine exposes one canonical function in
+[`backend/src/services/servicing.ts`](backend/src/services/servicing.ts):
+
+```ts
+calculateServicing(input: {
+  clientProfile, incomes, properties, liabilities,
+  existingLoans, proposedLoans, livingExpenses, loanScenario, params?
+}): ServicingResult
+```
+
+It **filters `properties`, `liabilities`, `existingLoans` and `proposedLoans` to
+only those with `includeInServicing === true` BEFORE** computing commitments,
+net monthly surplus, max loan (at the stress rate + term), DTI and pass/fail
+flags. Legacy rows missing the flag default to **included**. Income is
+normalised to monthly with per-category shading (variable/investment ~80%),
+pre/post-tax deductions reduce assessable income, and HECS/HELP is added as a
+monthly commitment when flagged. The proposed loan being assessed is the first
+included `proposedLoan` (its rate/term/IO drive the stress calc), otherwise the
+`loanScenario` parameters are used. The result always includes the
+**"Indicative estimate only - not a credit decision."** disclaimer.
+
+`POST /api/loan-scenarios` assembles these lists from the profile + selected
+scenario and calls `calculateServicing(...)`, so excluding a property or
+liability and recalculating visibly changes the borrowing number.
+
+### Client data-entry modules (Servicing & Financials)
+
+`/dashboard/financials` (linked from the dashboard nav and the profile page)
+hosts the Quickli-style data-entry forms; admins see read-only versions on
+`/api/admin/clients/:id`:
+
+- **Income** — a grouped MAIN-category dropdown (PAYG, variable, investment,
+  government/family, deductions) per applicant, each with amount + frequency, a
+  HECS/HELP flag + amount, and an optional shaded-monthly hint. Backed by
+  `/api/client/income-entries`.
+- **Property Portfolio table** — columns: Sr No., Property Type, Address, Loan
+  amount, Remaining amount, Rem Term, Est. valuation, Current bank, Interest
+  rate, Monthly repayment, Rent p.w, Year of purchase, Include in servicing. Loan
+  columns prefer a linked `ExistingHomeLoan` (`existingHomeLoanId`) and fall back
+  to optional inline fields on the property. Each row expands to a **View
+  property performance** panel (capital growth $/%, years held as "X years Y
+  months", CAGR, total gross rent, gross yield) with a green/amber/red growth
+  bar — all from the backend `growth` block (never recomputed on the client).
+- **Other Liabilities table** — Sr No., Liability Type, Ownership, Ownership %,
+  Lender, Credit limit, Interest rate, Monthly repayment, Include in servicing.
+  Credit cards use the configured limit-based assumed repayment when no repayment
+  is set.
+- **Existing & Proposed Home Loan tables** and a **Living Expenses form** (basic
+  amount + additional categories with a live total + notional rent toggle).
+
+**Include/exclude UX (Option A):** toggling a row immediately PATCHes its
+`includeInServicing` flag (via `POST /api/client/servicing-selection` with a
+single id); borrowing capacity is only recomputed when the user clicks
+**Recalculate borrowing capacity**, which calls the scenario API and shows the
+updated numbers with the indicative disclaimer. A mini summary above each table
+shows "X total, Y included in servicing".
+
+### Property valuation provider (realestate.com.au)
+
+> **Why a link, not a scraper:** realestate.com.au has **no free public
+> valuation API**, and scraping it violates their Terms of Service and is
+> unreliable — so this app **never scrapes**. Instead it builds a deep link to
+> the official realestate.com.au search/estimate page so the broker can open the
+> lender-grade estimate themselves. The manually entered **Est. valuation**
+> (`estimatedValue`) remains the source of truth used by the ROI/servicing
+> engine.
+
+A pluggable provider abstraction lives in
+[`backend/src/services/valuation.ts`](backend/src/services/valuation.ts),
+selected via `VALUATION_PROVIDER` (`manual` | `realestate_link` | `external`,
+default `manual`). `GET /api/valuation/link?address=..&postcode=..` returns (or,
+with `redirect=1`, 302-redirects to) a URL-encoded realestate.com.au search URL.
+The property form has an **address + postcode** field and a **"Find valuation on
+realestate.com.au"** button that opens that link in a new tab
+(`target="_blank"`, `rel="noopener"`). A paid API (PropTrack/CoreLogic/Domain)
+can be plugged into the same `ValuationProvider` interface later behind
+`VALUATION_API_KEY` — no route or engine changes required. Address autocomplete
+is a pluggable interface that defaults to a plain text input (no paid key, no
+network dependency that could break the build).

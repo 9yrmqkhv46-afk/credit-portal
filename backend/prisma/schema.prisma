@@ -125,6 +125,18 @@ model Property {
   ownership                  String?
   includeInServicing         Boolean  @default(true)
 
+  // --- Optional inline existing-loan fields for the Property Portfolio table.
+  // PREFER deriving loan columns from a linked ExistingHomeLoan
+  // (existingHomeLoanId) when present; otherwise these inline fields are used.
+  // All nullable -> Zod .nullable().optional().
+  existingHomeLoanId         String?
+  loanAmount                 Float?
+  remainingLoanAmount        Float?
+  loanTermRemainingYears     Float?
+  currentBank                String?
+  loanInterestRate           Float?
+  loanMonthlyRepayment       Float?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -354,6 +366,9 @@ model PersonalLiability {
   remainingTermYears Float?
   repaymentAmount    Float?
   includeInServicing Boolean  @default(true)
+  ownership          String?
+  ownershipPercent   Float?
+  lender             String?
   description        String?
 
   createdAt       DateTime @default(now())

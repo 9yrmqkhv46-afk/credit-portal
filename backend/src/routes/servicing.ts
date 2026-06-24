@@ -397,6 +397,9 @@ const liabilitySchema = z.object({
   remainingTermYears: z.number().min(0).nullable().optional(),
   repaymentAmount: z.number().min(0).nullable().optional(),
   includeInServicing: z.boolean().optional(),
+  ownership: z.string().nullable().optional(),
+  ownershipPercent: z.number().min(0).max(100).nullable().optional(),
+  lender: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
 });
 

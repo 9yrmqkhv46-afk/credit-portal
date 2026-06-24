@@ -42,9 +42,18 @@ export const INCOME_CATEGORIES = [
   'FAMILY_TAX_A',
   'FAMILY_TAX_B',
   'PARENTING_PAYMENT',
+  // Deductions REDUCE assessable income (handled specially in normaliseIncome).
+  'PRETAX_DEDUCTION',
+  'POSTTAX_DEDUCTION',
 ] as const;
 
 export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
+
+/**
+ * Categories that REDUCE net income rather than add to it. Their (positive)
+ * amount is subtracted, un-shaded, in normaliseIncome.
+ */
+export const DEDUCTION_CATEGORIES: readonly string[] = ['PRETAX_DEDUCTION', 'POSTTAX_DEDUCTION'];
 
 /**
  * Per-category income shading (the fraction of declared income counted toward
@@ -77,6 +86,9 @@ export const INCOME_SHADING: Record<IncomeCategory, number> = {
   FAMILY_TAX_A: 1.0,
   FAMILY_TAX_B: 1.0,
   PARENTING_PAYMENT: 1.0,
+  // Deductions are subtracted un-shaded; the value here is unused for them.
+  PRETAX_DEDUCTION: 1.0,
+  POSTTAX_DEDUCTION: 1.0,
 };
 
 /** Default shading for an unknown / unmapped category. */

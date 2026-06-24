@@ -4,13 +4,14 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { Frequency, toMonthly } from '../utils/frequency';
 import {
-  computeServicing,
+  calculateServicing,
   DetailedIncomeInput,
   ExistingLoanInput,
   PersonalLiabilityInput,
   LivingExpensesInput,
+  ServicingPropertyInput,
+  ServicingProposedLoanInput,
 } from '../services/servicing';
-import { RENTAL_INCOME_SHADING } from '../services/servicing.config';
 
 const router = Router();
 
@@ -59,6 +60,7 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
         incomeEntries: true,
         livingExpenses: true,
         existingHomeLoans: true,
+        proposedHomeLoans: true,
         personalLiabilities: true,
         properties: true,
       },
@@ -139,32 +141,47 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
         })),
     ];
 
-    // --- Shaded rental income from INCLUDED investment/rental properties ---
-    let rentalMonthlyIncome = 0;
-    for (const p of profile.properties as any[]) {
-      if (p.includeInServicing === false) continue;
-      if (p.type === 'OWNER_OCCUPIED') continue;
-      let weekly = 0;
-      if (p.rentalIncomeAmount != null) {
-        weekly = (toMonthly(p.rentalIncomeAmount, parseFrequency(p.rentalIncomeFrequency || 'WEEKLY')) * 12) / 52;
-      } else if (p.rentalIncome != null) {
-        weekly = p.rentalIncome;
-      }
-      rentalMonthlyIncome += ((weekly * 52) / 12) * RENTAL_INCOME_SHADING;
-    }
+    // --- Proposed home loans (selectable as the loan being assessed) ---
+    const proposedLoans: ServicingProposedLoanInput[] = profile.proposedHomeLoans.map((l: any) => ({
+      loanAmount: l.loanAmount,
+      termYears: l.termYears,
+      ioTermYears: l.ioTermYears,
+      interestRate: l.interestRate,
+      investmentFlag: l.investmentFlag,
+      includeInServicing: l.includeInServicing,
+    }));
 
-    const result = computeServicing({
-      incomeEntries,
-      livingExpenses,
+    // --- Properties: pass the raw list; calculateServicing filters by
+    //     includeInServicing and derives shaded rental income itself. ---
+    const properties: ServicingPropertyInput[] = (profile.properties as any[]).map((p) => ({
+      id: p.id,
+      type: p.type,
+      estimatedValue: p.estimatedValue,
+      mortgageBalance: p.mortgageBalance,
+      purchasePrice: p.purchasePrice,
+      purchaseDate: p.purchaseDate,
+      rentalIncome: p.rentalIncome,
+      rentalIncomeAmount: p.rentalIncomeAmount,
+      rentalIncomeFrequency: p.rentalIncomeFrequency,
+      includeInServicing: p.includeInServicing,
+    }));
+
+    const result = calculateServicing({
+      clientProfile: {
+        numberOfAdultDependants: profile.numberOfAdultDependants,
+        numberOfChildDependants: profile.numberOfChildDependants,
+      },
+      incomes: incomeEntries,
+      properties,
+      liabilities: personalLiabilities,
       existingLoans,
-      personalLiabilities,
-      rentalMonthlyIncome,
-      adults: 1 + profile.numberOfAdultDependants,
-      children: profile.numberOfChildDependants,
-      proposedLoanAmount: 0,
-      proposedInterestRate: data.interestRate,
-      proposedTermYears: data.loanTermYears,
-      repaymentType: data.repaymentType,
+      proposedLoans,
+      livingExpenses,
+      loanScenario: {
+        interestRate: data.interestRate,
+        loanTermYears: data.loanTermYears,
+        repaymentType: data.repaymentType,
+      },
     });
 
     const scenario = await prisma.loanScenario.create({

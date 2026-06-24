@@ -482,6 +482,10 @@ export default function ProfilePage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Financial Profile</h1>
         <p className="mt-1 text-slate-600">Complete your profile to get accurate borrowing calculations.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          For detailed income types, the property portfolio, liabilities and home loans, see{' '}
+          <a href="/dashboard/financials" className="font-medium text-brand hover:text-brand-dark">Servicing &amp; Financials</a>.
+        </p>
       </div>
 
       {/* Step progress indicator */}

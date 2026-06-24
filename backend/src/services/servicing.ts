@@ -20,6 +20,7 @@ import {
   defaultServicingConfig,
   shadingForCategory,
   BankPolicyPreset,
+  DEDUCTION_CATEGORIES,
 } from './servicing.config';
 import {
   calculateMaxLoanFromPayment,
@@ -218,6 +219,14 @@ export function normaliseIncome(
 
   for (const e of entries) {
     const monthly = toMonthly(e.amount, e.frequency);
+
+    // Deductions (pre/post-tax) REDUCE net income, un-shaded.
+    if (DEDUCTION_CATEGORIES.includes(e.category)) {
+      grossMonthlyIncome -= monthly;
+      totalMonthlyIncome -= monthly;
+      continue;
+    }
+
     const shading = shadingForCategory(e.category, e.shadingOverride, config);
     grossMonthlyIncome += monthly;
     totalMonthlyIncome += monthly * shading;
@@ -486,4 +495,127 @@ export function computeServicing(input: ServicingInput): ServicingResult {
     messages,
     repaymentBreakdown,
   };
+}
+
+
+// ---------------------------------------------------------------------------
+// Clean single entry point: calculateServicing
+// ---------------------------------------------------------------------------
+//
+// This is the canonical way to run the servicing engine. It accepts the raw
+// per-applicant lists (as loaded from the profile) and is responsible for:
+//   1. Filtering properties / liabilities / existingLoans / proposedLoans to
+//      ONLY those with includeInServicing === true BEFORE any computation.
+//      (Legacy rows missing the flag default to INCLUDED.)
+//   2. Normalising income to monthly with per-category shading + HECS/HELP.
+//   3. Deriving shaded rental income from the INCLUDED investment properties.
+//   4. Resolving the proposed loan being assessed (first included proposed
+//      loan, else the loan scenario parameters) for stress rate + term.
+//   5. Delegating the core serviceability / DTI / max-loan math to
+//      computeServicing, returning the standard ServicingResult (with the
+//      "Indicative estimate only - not a credit decision." disclaimer).
+
+export interface ServicingClientProfile {
+  numberOfAdultDependants?: number | null;
+  numberOfChildDependants?: number | null;
+}
+
+/** A property as consumed by the engine (superset of PropertyGrowthInput). */
+export interface ServicingPropertyInput extends PropertyGrowthInput {
+  id?: string;
+  type?: string | null;
+  mortgageBalance?: number | null;
+  includeInServicing?: boolean | null;
+}
+
+export interface ServicingProposedLoanInput {
+  loanAmount: number;
+  termYears?: number | null;
+  ioTermYears?: number | null;
+  interestRate?: number | null;
+  investmentFlag?: boolean | null;
+  includeInServicing?: boolean | null;
+}
+
+export interface ServicingLoanScenario {
+  interestRate: number; // decimal, e.g. 0.06
+  loanTermYears?: number | null;
+  repaymentType?: 'PI' | 'IO' | null;
+}
+
+export interface CalculateServicingInput {
+  clientProfile: ServicingClientProfile;
+  incomes: DetailedIncomeInput[];
+  properties: ServicingPropertyInput[];
+  liabilities: PersonalLiabilityInput[];
+  existingLoans: ExistingLoanInput[];
+  proposedLoans: ServicingProposedLoanInput[];
+  livingExpenses?: LivingExpensesInput | null;
+  loanScenario: ServicingLoanScenario;
+  params?: Partial<ServicingConfig>;
+}
+
+/** Default-true include flag: legacy rows missing the flag are INCLUDED. */
+function isIncludedInServicing(v: { includeInServicing?: boolean | null }): boolean {
+  return v.includeInServicing !== false;
+}
+
+/**
+ * Canonical servicing entry point. See block comment above for the contract.
+ */
+export function calculateServicing(input: CalculateServicingInput): ServicingResult {
+  const config: ServicingConfig = { ...defaultServicingConfig, ...input.params };
+
+  // 1) Filter every list to ONLY included entities BEFORE any computation.
+  const includedProperties = (input.properties || []).filter(isIncludedInServicing);
+  const includedLiabilities = (input.liabilities || []).filter(isIncludedInServicing);
+  const includedExistingLoans = (input.existingLoans || []).filter(isIncludedInServicing);
+  const includedProposedLoans = (input.proposedLoans || []).filter(isIncludedInServicing);
+
+  // 2) Net (shaded) rental income from INCLUDED non-owner-occupied properties.
+  //    Reuse computePropertyGrowth to normalise the weekly rent.
+  let rentalMonthlyIncome = 0;
+  for (const p of includedProperties) {
+    if ((p.type || '').toUpperCase() === 'OWNER_OCCUPIED') continue;
+    const g = computePropertyGrowth(p);
+    if (g.weeklyRent && g.weeklyRent > 0) {
+      rentalMonthlyIncome += ((g.weeklyRent * 52) / 12) * config.rentalIncomeShading;
+    }
+  }
+
+  // 3) Resolve the proposed loan being assessed: the first INCLUDED proposed
+  //    loan, else fall back to the loan scenario parameters.
+  const assessed = includedProposedLoans[0];
+  const proposedInterestRate =
+    assessed && assessed.interestRate != null
+      ? assessed.interestRate
+      : input.loanScenario.interestRate;
+  const proposedTermYears =
+    (assessed && assessed.termYears != null
+      ? assessed.termYears
+      : input.loanScenario.loanTermYears) ?? 30;
+  const repaymentType: 'PI' | 'IO' =
+    assessed && (assessed.ioTermYears || 0) > 0
+      ? 'IO'
+      : input.loanScenario.repaymentType || 'PI';
+  const proposedLoanAmount = assessed ? assessed.loanAmount : 0;
+
+  const adults = 1 + (input.clientProfile.numberOfAdultDependants || 0);
+  const children = input.clientProfile.numberOfChildDependants || 0;
+
+  // 4) Delegate the core math to computeServicing with the FILTERED lists.
+  return computeServicing({
+    incomeEntries: input.incomes,
+    livingExpenses: input.livingExpenses,
+    existingLoans: includedExistingLoans,
+    personalLiabilities: includedLiabilities,
+    rentalMonthlyIncome,
+    adults,
+    children,
+    proposedLoanAmount,
+    proposedInterestRate,
+    proposedTermYears,
+    repaymentType,
+    config: input.params,
+  });
 }

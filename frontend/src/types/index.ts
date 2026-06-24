@@ -94,6 +94,14 @@ export interface Property {
   valuationDate?: string | null;
   ownership?: string | null;
   includeInServicing?: boolean;
+  // Optional inline existing-loan fields (Property Portfolio table)
+  existingHomeLoanId?: string | null;
+  loanAmount?: number | null;
+  remainingLoanAmount?: number | null;
+  loanTermRemainingYears?: number | null;
+  currentBank?: string | null;
+  loanInterestRate?: number | null;
+  loanMonthlyRepayment?: number | null;
   growth?: PropertyGrowth;
   createdAt: string;
   updatedAt: string;
@@ -285,7 +293,7 @@ export type IncomeCategory =
   | 'FOREIGN_PAYG' | 'NET_FOREIGN' | 'INVESTMENT' | 'INTEREST' | 'SUPER_ANNUITY'
   | 'CARERS' | 'GOVERNMENT_PENSION' | 'COMPANY_CAR' | 'CHILD_MAINTENANCE'
   | 'OTHER_TAXED' | 'OTHER_TAX_FREE' | 'FAMILY_TAX_A' | 'FAMILY_TAX_B'
-  | 'PARENTING_PAYMENT';
+  | 'PARENTING_PAYMENT' | 'PRETAX_DEDUCTION' | 'POSTTAX_DEDUCTION';
 
 export type EmploymentType = 'FULL_TIME_PERMANENT' | 'PART_TIME' | 'CASUAL' | 'CONTRACT';
 
@@ -365,6 +373,9 @@ export interface PersonalLiability {
   remainingTermYears: number | null;
   repaymentAmount: number | null;
   includeInServicing: boolean;
+  ownership: string | null;
+  ownershipPercent: number | null;
+  lender: string | null;
   description: string | null;
   createdAt: string;
   updatedAt: string;

@@ -12,6 +12,9 @@ import { Alert } from '@/components/ui/Alert';
 import api from '@/lib/api';
 import { AdminClientDetail, Note, ClientStatus } from '@/types';
 import { AxiosError } from 'axios';
+import { PropertyPortfolioTable } from '@/components/properties/PropertyPortfolioTable';
+import { OtherLiabilitiesTable } from '@/components/liabilities/OtherLiabilitiesTable';
+import { ExistingHomeLoansTable } from '@/components/loans/ExistingHomeLoansTable';
 
 const STATUS_OPTIONS = [
   { value: 'Prospect', label: 'Prospect' },
@@ -101,6 +104,13 @@ export default function AdminClientDetailPage() {
   if (!client) return <Alert variant="error">Client not found.</Alert>;
 
   const profile = client.clientProfile;
+  // The admin GET returns the full Quickli-style profile; surface the extended
+  // collections (typed loosely as they extend the base AdminClientDetail shape).
+  const fullProfile = profile as unknown as {
+    properties?: import('@/types').Property[];
+    personalLiabilities?: import('@/types').PersonalLiability[];
+    existingHomeLoans?: import('@/types').ExistingHomeLoan[];
+  } | null;
 
   return (
     <div className="space-y-6">
@@ -186,6 +196,22 @@ export default function AdminClientDetailPage() {
             </div>
           )}
         </Card>
+      )}
+
+      {/* Quickli-style portfolio / liabilities / loans (read-only) */}
+      {fullProfile && (
+        <>
+          <Card title="Property Portfolio">
+            <PropertyPortfolioTable readOnly initialProperties={fullProfile.properties || []}
+              initialExistingLoans={fullProfile.existingHomeLoans || []} />
+          </Card>
+          <Card title="Other Liabilities">
+            <OtherLiabilitiesTable readOnly initialLiabilities={fullProfile.personalLiabilities || []} />
+          </Card>
+          <Card title="Existing Home Loans">
+            <ExistingHomeLoansTable readOnly initialLoans={fullProfile.existingHomeLoans || []} />
+          </Card>
+        </>
       )}
 
       {/* Loan Scenarios */}

@@ -6,6 +6,8 @@ import {
   existingLoanCommitments,
   personalLiabilityCommitments,
   computeServicing,
+  calculateServicing,
+  CalculateServicingInput,
 } from '../services/servicing';
 
 describe('Property growth / ROI', () => {
@@ -104,6 +106,15 @@ describe('Income normalisation with shading', () => {
     ]);
     expect(r.hecsMonthlyCommitment).toBe(500);
   });
+
+  test('pre/post-tax deductions reduce net income (un-shaded)', () => {
+    const r = normaliseIncome([
+      { category: 'BASE_SALARY_PAYG', amount: 120000, frequency: 'ANNUAL' }, // +10000/mo
+      { category: 'PRETAX_DEDUCTION', amount: 12000, frequency: 'ANNUAL' }, // -1000/mo
+    ]);
+    expect(r.totalMonthlyIncome).toBeCloseTo(9000, 4);
+    expect(r.grossMonthlyIncome).toBeCloseTo(9000, 4);
+  });
 });
 
 describe('Living expenses floor', () => {
@@ -156,5 +167,122 @@ describe('Servicing filtering by includeInServicing', () => {
     expect(typeof result.maxBorrowingCapacity).toBe('number');
     expect(result.maxBorrowingCapacity).toBeGreaterThan(0);
     expect(result.messages).toContain('Indicative estimate only - not a credit decision.');
+  });
+});
+
+
+describe('calculateServicing entry point', () => {
+  // A reusable baseline input. Strong salary so there is always capacity.
+  function baseInput(overrides: Partial<CalculateServicingInput> = {}): CalculateServicingInput {
+    return {
+      clientProfile: { numberOfAdultDependants: 0, numberOfChildDependants: 0 },
+      incomes: [{ category: 'BASE_SALARY_PAYG', amount: 180000, frequency: 'ANNUAL' }],
+      properties: [],
+      liabilities: [],
+      existingLoans: [],
+      proposedLoans: [],
+      livingExpenses: { basicExpenseAmount: 8000, basicExpenseFrequency: 'MONTHLY' },
+      loanScenario: { interestRate: 0.06, loanTermYears: 30, repaymentType: 'PI' },
+      ...overrides,
+    };
+  }
+
+  test('produces a numeric max borrowing capacity + disclaimer', () => {
+    const r = calculateServicing(baseInput());
+    expect(typeof r.maxBorrowingCapacity).toBe('number');
+    expect(r.maxBorrowingCapacity).toBeGreaterThan(0);
+    expect(r.messages).toContain('Indicative estimate only - not a credit decision.');
+  });
+
+  test('excluding an existing loan changes (increases) the result', () => {
+    const withLoan = calculateServicing(
+      baseInput({
+        existingLoans: [
+          { loanAmount: 400000, interestRate: 0.06, termYears: 30, monthlyRepayment: 2500, includeInServicing: true },
+        ],
+      })
+    );
+    const excluded = calculateServicing(
+      baseInput({
+        existingLoans: [
+          { loanAmount: 400000, interestRate: 0.06, termYears: 30, monthlyRepayment: 2500, includeInServicing: false },
+        ],
+      })
+    );
+    // Excluding the loan removes a commitment -> higher surplus -> bigger capacity.
+    expect(excluded.maxBorrowingCapacity).toBeGreaterThan(withLoan.maxBorrowingCapacity);
+    expect(excluded.monthlyCommitments).toBeLessThan(withLoan.monthlyCommitments);
+  });
+
+  test('excluding an investment property removes its rental income', () => {
+    const prop = {
+      type: 'INVESTMENT' as const,
+      estimatedValue: 700000,
+      rentalIncomeAmount: 700,
+      rentalIncomeFrequency: 'WEEKLY',
+    };
+    const included = calculateServicing(baseInput({ properties: [{ ...prop, includeInServicing: true }] }));
+    const excluded = calculateServicing(baseInput({ properties: [{ ...prop, includeInServicing: false }] }));
+    expect(included.totalMonthlyIncome).toBeGreaterThan(excluded.totalMonthlyIncome);
+    expect(included.maxBorrowingCapacity).toBeGreaterThan(excluded.maxBorrowingCapacity);
+  });
+
+  test('legacy property missing includeInServicing defaults to INCLUDED', () => {
+    const prop = { type: 'INVESTMENT' as const, estimatedValue: 700000, rentalIncomeAmount: 700, rentalIncomeFrequency: 'WEEKLY' };
+    const legacy = calculateServicing(baseInput({ properties: [{ ...prop }] })); // no flag
+    const noProp = calculateServicing(baseInput({ properties: [] }));
+    expect(legacy.totalMonthlyIncome).toBeGreaterThan(noProp.totalMonthlyIncome);
+  });
+
+  test('HECS/HELP flag adds a monthly commitment', () => {
+    const noHecs = calculateServicing(baseInput());
+    const withHecs = calculateServicing(
+      baseInput({
+        incomes: [
+          { category: 'BASE_SALARY_PAYG', amount: 180000, frequency: 'ANNUAL', hecsFlag: true, hecsAmount: 700 },
+        ],
+      })
+    );
+    expect(withHecs.hecsMonthlyCommitment).toBe(700);
+    expect(withHecs.monthlyCommitments - noHecs.monthlyCommitments).toBeCloseTo(700, 4);
+    expect(withHecs.maxBorrowingCapacity).toBeLessThan(noHecs.maxBorrowingCapacity);
+  });
+
+  test('income shading is applied (variable income counted < gross)', () => {
+    // Same gross via salary (100%) vs investment (80% shaded) -> different income.
+    const salary = calculateServicing(
+      baseInput({ incomes: [{ category: 'BASE_SALARY_PAYG', amount: 120000, frequency: 'ANNUAL' }] })
+    );
+    const investment = calculateServicing(
+      baseInput({ incomes: [{ category: 'INVESTMENT', amount: 120000, frequency: 'ANNUAL' }] })
+    );
+    expect(investment.totalMonthlyIncome).toBeLessThan(salary.totalMonthlyIncome);
+    // 80% of 10000/month = 8000
+    expect(investment.totalMonthlyIncome).toBeCloseTo(8000, 4);
+  });
+
+  test('excluding a personal liability increases capacity; credit card uses limit %', () => {
+    const withCc = calculateServicing(
+      baseInput({ liabilities: [{ type: 'CREDIT_CARD', limit: 30000, includeInServicing: true }] })
+    );
+    const excluded = calculateServicing(
+      baseInput({ liabilities: [{ type: 'CREDIT_CARD', limit: 30000, includeInServicing: false }] })
+    );
+    // 30000 * 0.03 = 900 assumed monthly repayment when included.
+    expect(withCc.monthlyCommitments - excluded.monthlyCommitments).toBeCloseTo(900, 4);
+    expect(excluded.maxBorrowingCapacity).toBeGreaterThan(withCc.maxBorrowingCapacity);
+  });
+
+  test('an included proposed loan with an override rate drives the stress rate', () => {
+    const fromScenario = calculateServicing(baseInput());
+    const fromProposed = calculateServicing(
+      baseInput({
+        proposedLoans: [
+          { loanAmount: 500000, termYears: 30, ioTermYears: 0, interestRate: 0.09, includeInServicing: true },
+        ],
+      })
+    );
+    // Higher proposed rate => higher stress rate => lower serviceability max.
+    expect(fromProposed.serviceabilityMax).toBeLessThan(fromScenario.serviceabilityMax);
   });
 });
