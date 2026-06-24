@@ -10,6 +10,8 @@ import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import {
   money, pct, yearsMonths, FREQUENCY_OPTIONS,
   recalculateBorrowingCapacity, setIncludeInServicing, ServicingCalcResult,
@@ -68,19 +70,27 @@ async function openValuationLink(address: string, postcode?: string | null) {
   }
 }
 
-/** Growth bar: purchase price (left) -> current value (right). */
+/** Growth bar: purchase price (left) -> current value (right). Animates its
+ * fill width from 0 on mount for a subtle reveal. */
 function GrowthBar({ purchase, current }: { purchase: number | null | undefined; current: number }) {
-  if (!purchase || purchase <= 0) {
+  const ratio = purchase && purchase > 0 ? current / purchase : null;
+  const growthPct = ratio !== null ? (ratio - 1) * 100 : 0;
+  const targetFill = ratio !== null ? Math.max(4, Math.min(100, (ratio / 2) * 100)) : 0;
+  const [fill, setFill] = useState(0);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setFill(targetFill));
+    return () => cancelAnimationFrame(id);
+  }, [targetFill]);
+
+  if (ratio === null) {
     return <div className="h-2 w-full rounded-full bg-slate-200" aria-hidden="true" />;
   }
-  const ratio = current / purchase;
-  const growthPct = (ratio - 1) * 100;
   const color = growthPct >= 10 ? 'bg-emerald-500' : growthPct >= 0 ? 'bg-amber-500' : 'bg-red-500';
-  const fill = Math.max(4, Math.min(100, (ratio / 2) * 100));
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200" role="img"
       aria-label={`Growth ${growthPct.toFixed(1)} percent`}>
-      <div className={`h-full ${color} transition-all`} style={{ width: `${fill}%` }} />
+      <div className={`bar-fill h-full ${color}`} style={{ width: `${fill}%` }} />
     </div>
   );
 }
@@ -271,11 +281,17 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
           </div>
         )}
       </div>
+      {!readOnly && (
+        <p className="text-xs text-slate-500">Tick the items to include in the borrowing calculation.</p>
+      )}
 
       {recalcResult && (
         <Alert variant="info">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
-            <span className="font-semibold">Max borrowing capacity: {money(recalcResult.maxBorrowingCapacity)}</span>
+            <span className="font-semibold">
+              Max borrowing capacity:{' '}
+              <AnimatedNumber value={recalcResult.maxBorrowingCapacity} prefix="$" />
+            </span>
             <span>Monthly surplus: {money(recalcResult.netMonthlySurplus)}</span>
             <span>DTI: {recalcResult.dtiRatio.toFixed(2)}x</span>
           </div>
@@ -311,7 +327,7 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
               const isOpen = !!expanded[p.id];
               return (
                 <React.Fragment key={p.id}>
-                  <tr className="border-b border-white/30 text-slate-800">
+                  <tr className="row-hover border-b border-white/30 text-slate-800">
                     <td className="px-3 py-2">{idx + 1}</td>
                     <td className="px-3 py-2">{p.type.replace(/_/g, ' ')}</td>
                     <td className="px-3 py-2">
@@ -328,12 +344,12 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
                     <td className="px-3 py-2">{g?.weeklyRent != null ? money(g.weeklyRent) : '—'}</td>
                     <td className="px-3 py-2">{yearOfPurchase(p)}</td>
                     <td className="px-3 py-2">
-                      <label className="inline-flex cursor-pointer items-center">
-                        <input type="checkbox" disabled={readOnly}
-                          checked={p.includeInServicing !== false}
-                          onChange={() => toggleInclude(p)}
-                          className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" />
-                      </label>
+                      <ToggleSwitch
+                        checked={p.includeInServicing !== false}
+                        disabled={readOnly}
+                        onChange={() => toggleInclude(p)}
+                        label={`Include ${p.address} in servicing`}
+                      />
                     </td>
                     {!readOnly && (
                       <td className="px-3 py-2 whitespace-nowrap">
@@ -345,41 +361,45 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
                   <tr className="border-b border-white/30 bg-white/20">
                     <td colSpan={readOnly ? 13 : 14} className="px-3 py-1">
                       <button onClick={() => setExpanded((s) => ({ ...s, [p.id]: !s[p.id] }))}
-                        className="text-xs font-medium text-slate-600 hover:text-brand">
-                        {isOpen ? '▾ Hide property performance' : '▸ View property performance'}
+                        className="text-xs font-medium text-slate-600 transition-colors hover:text-brand"
+                        aria-expanded={isOpen}>
+                        <span className={`mr-1 inline-block transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`}>▸</span>
+                        {isOpen ? 'Hide property performance' : 'View property performance'}
                       </button>
-                      {isOpen && (
-                        <div className="py-3">
-                          <div className="mb-2 flex justify-between text-xs text-slate-500">
-                            <span>Purchase {money(g?.purchasePrice ?? p.purchasePrice ?? null)}</span>
-                            <span>Now {money(p.estimatedValue)}</span>
-                          </div>
-                          <GrowthBar purchase={g?.purchasePrice ?? p.purchasePrice ?? null} current={p.estimatedValue} />
-                          <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
-                            <div>
-                              <p className="text-xs text-slate-500">Capital growth</p>
-                              <p className="font-semibold">{money(g?.capitalGrowthDollars)}</p>
-                              <p className="text-xs text-slate-500">{pct(g?.capitalGrowthPercent)}</p>
+                      <div className={`collapsible ${isOpen ? 'is-open' : ''}`}>
+                        <div className="collapsible-inner">
+                          <div className="py-3">
+                            <div className="mb-2 flex justify-between text-xs text-slate-500">
+                              <span>Purchase {money(g?.purchasePrice ?? p.purchasePrice ?? null)}</span>
+                              <span>Now {money(p.estimatedValue)}</span>
                             </div>
-                            <div>
-                              <p className="text-xs text-slate-500">Years held</p>
-                              <p className="font-semibold">{yearsMonths(g?.yearsHeld)}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-500">CAGR</p>
-                              <p className="font-semibold">{pct(g?.cagrPercent)}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-500">Total gross rent</p>
-                              <p className="font-semibold">{money(g?.totalGrossRent)}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-500">Gross yield</p>
-                              <p className="font-semibold">{pct(g?.grossYieldPercent)}</p>
+                            <GrowthBar purchase={g?.purchasePrice ?? p.purchasePrice ?? null} current={p.estimatedValue} />
+                            <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+                              <div>
+                                <p className="text-xs text-slate-500">Capital growth</p>
+                                <p className="font-semibold">{money(g?.capitalGrowthDollars)}</p>
+                                <p className="text-xs text-slate-500">{pct(g?.capitalGrowthPercent)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500">Years held</p>
+                                <p className="font-semibold">{yearsMonths(g?.yearsHeld)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500">CAGR</p>
+                                <p className="font-semibold">{pct(g?.cagrPercent)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500">Total gross rent</p>
+                                <p className="font-semibold">{money(g?.totalGrossRent)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500">Gross yield</p>
+                                <p className="font-semibold">{pct(g?.grossYieldPercent)}</p>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 </React.Fragment>

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Alert } from '@/components/ui/Alert';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { money, pct, setIncludeInServicing } from '@/lib/servicingUi';
 
 function extractApiError(err: unknown, fallback: string): string {
@@ -106,6 +107,9 @@ export function ExistingHomeLoansTable({ readOnly = false, initialLoans }: Props
         </p>
         {!readOnly && <Button size="sm" onClick={openAdd}>+ Add existing loan</Button>}
       </div>
+      {!readOnly && (
+        <p className="text-xs text-slate-500">Tick the items to include in the borrowing calculation.</p>
+      )}
 
       <div className="overflow-x-auto rounded-xl border border-white/50 bg-white/40 backdrop-blur-sm">
         <table className="min-w-full text-sm">
@@ -128,7 +132,7 @@ export function ExistingHomeLoansTable({ readOnly = false, initialLoans }: Props
           </thead>
           <tbody>
             {items.map((l, idx) => (
-              <tr key={l.id} className="border-b border-white/30 text-slate-800">
+              <tr key={l.id} className="row-hover border-b border-white/30 text-slate-800">
                 <td className="px-3 py-2">{idx + 1}</td>
                 <td className="px-3 py-2">{l.lender || '—'}</td>
                 <td className="px-3 py-2">{l.locFlag ? 'Yes' : 'No'}</td>
@@ -141,9 +145,12 @@ export function ExistingHomeLoansTable({ readOnly = false, initialLoans }: Props
                 <td className="px-3 py-2">{l.securityLinks}</td>
                 <td className="px-3 py-2">{l.ownership || '—'}</td>
                 <td className="px-3 py-2">
-                  <input type="checkbox" disabled={readOnly} checked={l.includeInServicing !== false}
+                  <ToggleSwitch
+                    checked={l.includeInServicing !== false}
+                    disabled={readOnly}
                     onChange={() => toggleInclude(l)}
-                    className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" />
+                    label={`Include ${l.lender || 'loan'} in servicing`}
+                  />
                 </td>
                 {!readOnly && (
                   <td className="px-3 py-2 whitespace-nowrap">

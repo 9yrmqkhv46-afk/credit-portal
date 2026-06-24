@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { money, pct, setIncludeInServicing } from '@/lib/servicingUi';
 
 function extractApiError(err: unknown, fallback: string): string {
@@ -106,6 +107,9 @@ export function ProposedHomeLoansTable({ readOnly = false, initialLoans }: Props
         </p>
         {!readOnly && <Button size="sm" onClick={openAdd}>+ Add proposed loan</Button>}
       </div>
+      {!readOnly && (
+        <p className="text-xs text-slate-500">Tick a loan to include it; the first ticked loan is assessed by the borrowing calculation.</p>
+      )}
 
       <div className="overflow-x-auto rounded-xl border border-white/50 bg-white/40 backdrop-blur-sm">
         <table className="min-w-full text-sm">
@@ -128,7 +132,7 @@ export function ProposedHomeLoansTable({ readOnly = false, initialLoans }: Props
           </thead>
           <tbody>
             {items.map((l, idx) => (
-              <tr key={l.id} className="border-b border-white/30 text-slate-800">
+              <tr key={l.id} className="row-hover border-b border-white/30 text-slate-800">
                 <td className="px-3 py-2">{idx + 1}</td>
                 <td className="px-3 py-2">{l.productType || '—'}</td>
                 <td className="px-3 py-2">{l.investmentFlag ? 'Yes' : 'No'}</td>
@@ -141,12 +145,15 @@ export function ProposedHomeLoansTable({ readOnly = false, initialLoans }: Props
                 <td className="px-3 py-2">{l.securityLinks}</td>
                 <td className="px-3 py-2">{l.ownership || '—'}</td>
                 <td className="px-3 py-2">
-                  <label className="inline-flex items-center gap-1">
-                    <input type="checkbox" disabled={readOnly} checked={l.includeInServicing !== false}
+                  <div className="inline-flex items-center gap-2">
+                    <ToggleSwitch
+                      checked={l.includeInServicing !== false}
+                      disabled={readOnly}
                       onChange={() => toggleInclude(l)}
-                      className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" />
+                      label={`Assess ${l.productType || 'loan'}`}
+                    />
                     {l.id === assessedId && <Badge variant="success">assessed</Badge>}
-                  </label>
+                  </div>
                 </td>
                 {!readOnly && (
                   <td className="px-3 py-2 whitespace-nowrap">

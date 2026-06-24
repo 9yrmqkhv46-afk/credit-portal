@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { Alert } from '@/components/ui/Alert';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import {
   money, pct, recalculateBorrowingCapacity, setIncludeInServicing, ServicingCalcResult,
 } from '@/lib/servicingUi';
@@ -163,11 +165,17 @@ export function OtherLiabilitiesTable({ readOnly = false, initialLiabilities }: 
           </div>
         )}
       </div>
+      {!readOnly && (
+        <p className="text-xs text-slate-500">Tick the items to include in the borrowing calculation.</p>
+      )}
 
       {recalcResult && (
         <Alert variant="info">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
-            <span className="font-semibold">Max borrowing capacity: {money(recalcResult.maxBorrowingCapacity)}</span>
+            <span className="font-semibold">
+              Max borrowing capacity:{' '}
+              <AnimatedNumber value={recalcResult.maxBorrowingCapacity} prefix="$" />
+            </span>
             <span>Monthly commitments: {money(recalcResult.monthlyCommitments)}</span>
             <span>DTI: {recalcResult.dtiRatio.toFixed(2)}x</span>
           </div>
@@ -195,7 +203,7 @@ export function OtherLiabilitiesTable({ readOnly = false, initialLiabilities }: 
             {items.map((l, idx) => {
               const rep = effectiveRepayment(l);
               return (
-                <tr key={l.id} className="border-b border-white/30 text-slate-800">
+                <tr key={l.id} className="row-hover border-b border-white/30 text-slate-800">
                   <td className="px-3 py-2">{idx + 1}</td>
                   <td className="px-3 py-2">{l.type.replace(/_/g, ' ')}</td>
                   <td className="px-3 py-2">{l.ownership || '—'}</td>
@@ -208,9 +216,12 @@ export function OtherLiabilitiesTable({ readOnly = false, initialLiabilities }: 
                     {rep.assumed && <span className="ml-1 text-xs text-slate-400">(assumed {(CC_REPAYMENT_PCT * 100).toFixed(0)}% of limit)</span>}
                   </td>
                   <td className="px-3 py-2">
-                    <input type="checkbox" disabled={readOnly} checked={l.includeInServicing !== false}
+                    <ToggleSwitch
+                      checked={l.includeInServicing !== false}
+                      disabled={readOnly}
                       onChange={() => toggleInclude(l)}
-                      className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" />
+                      label={`Include ${l.type} in servicing`}
+                    />
                   </td>
                   {!readOnly && (
                     <td className="px-3 py-2 whitespace-nowrap">

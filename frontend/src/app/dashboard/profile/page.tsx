@@ -7,72 +7,76 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Alert } from '@/components/ui/Alert';
 import { Spinner } from '@/components/ui/Spinner';
+import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import api from '@/lib/api';
 import { AxiosError } from 'axios';
-import {
-  ClientProfile, ClientProfileInput, IncomeSource, IncomeSourceInput,
-  ExistingDebt, ExistingDebtInput, Property, PropertyInput,
-  ExpenseSummary, ExpenseSummaryInput, Frequency
-} from '@/types';
+import { ClientProfile, ClientProfileInput } from '@/types';
+import { recalculateBorrowingCapacity, ServicingCalcResult, money } from '@/lib/servicingUi';
 
-const STEPS = ['Personal Details', 'Dependants', 'Income Sources', 'Existing Debts', 'Properties', 'Expenses'];
-const STEP_HELP = [
-  'Tell us a little about yourself so we can tailor your assessment.',
-  'Dependants affect your minimum living expenses in the calculation.',
-  'Add every income stream. Variable income is shaded at 80%.',
-  'List any existing loans or credit cards you are servicing.',
-  'Add properties you own. Optional fields can be left blank.',
-  'Your declared monthly living expenses for serviceability.',
-];
+// Section components consolidated from the (now removed) financials page so all
+// data entry lives in ONE place — the profile.
+import { IncomeEntriesSection } from '@/components/income/IncomeEntriesSection';
+import { PropertyPortfolioTable } from '@/components/properties/PropertyPortfolioTable';
+import { ExistingHomeLoansTable } from '@/components/loans/ExistingHomeLoansTable';
+import { ProposedHomeLoansTable } from '@/components/loans/ProposedHomeLoansTable';
+import { OtherLiabilitiesTable } from '@/components/liabilities/OtherLiabilitiesTable';
+import { LivingExpensesForm } from '@/components/expenses/LivingExpensesForm';
 
-/**
- * Pull the most specific human-readable message out of an Axios error,
- * preferring backend Zod validation details, then the backend `error`
- * string, then a sensible fallback.
- */
-function extractApiError(err: unknown, fallback: string): string {
-  const ax = err as AxiosError<{ error?: string; details?: { message: string }[] }>;
-  return ax.response?.data?.details?.[0]?.message || ax.response?.data?.error || fallback;
+/** Inline SVG section icons (no icon-font / no network). */
+const Icon = {
+  user: (
+    <path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.5-9 6v2h18v-2c0-3.5-4-6-9-6z" />
+  ),
+  users: (
+    <path d="M16 11a4 4 0 10-4-4 4 4 0 004 4zm-8 1a3.5 3.5 0 10-3.5-3.5A3.5 3.5 0 008 12zm0 2c-3 0-6 1.6-6 4v2h8v-2c0-1 .4-1.9 1-2.7A9.6 9.6 0 008 14zm8 0c-3.3 0-7 1.7-7 4.3V20h14v-1.7c0-2.6-3.7-4.3-7-4.3z" />
+  ),
+  income: (
+    <path d="M3 5h18a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V6a1 1 0 011-1zm9 3a4 4 0 100 8 4 4 0 000-8z" />
+  ),
+  home: (
+    <path d="M12 3l9 8h-3v9h-5v-6H11v6H6v-9H3l9-8z" />
+  ),
+  doc: (
+    <path d="M6 2h8l6 6v14a0 0 0 010 0H6a0 0 0 010 0V2zm7 1.5V9h5.5L13 3.5z" />
+  ),
+  plus: (
+    <path d="M11 11V4h2v7h7v2h-7v7h-2v-7H4v-2h7z" />
+  ),
+  card: (
+    <path d="M3 6h18a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V7a1 1 0 011-1zm0 4v2h18v-2H3z" />
+  ),
+  receipt: (
+    <path d="M5 2h14v20l-3-2-3 2-3-2-3 2V2zm3 5h8v2H8V7zm0 4h8v2H8v-2z" />
+  ),
+  check: (
+    <path d="M9 16.2l-3.5-3.5L4 14.2 9 19l11-11-1.5-1.5z" />
+  ),
+};
+
+function SectionIcon({ path, className = '' }: { path: React.ReactNode; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      {path}
+    </svg>
+  );
 }
 
-/**
- * Coerce a user-entered value into a real, finite number, or `undefined` when
- * it is blank / null / NaN. Used to build payloads that OMIT optional numeric
- * fields entirely rather than sending `null` (which previously produced the
- * backend Zod error "Expected number, received null").
- */
-function optionalNumber(value: unknown): number | undefined {
-  if (value === null || value === undefined || value === '') return undefined;
-  const n = typeof value === 'number' ? value : parseFloat(String(value));
-  return Number.isFinite(n) ? n : undefined;
+interface StepDef {
+  label: string;
+  help: string;
+  icon: React.ReactNode;
 }
 
-/**
- * Coerce a value into a real number, falling back to `fallback` (default 0)
- * when blank / null / NaN. Used for required balance fields that should
- * default to 0 rather than error.
- */
-function requiredNumber(value: unknown, fallback = 0): number {
-  const n = optionalNumber(value);
-  return n === undefined ? fallback : n;
-}
-
-/**
- * Remove any keys whose value is `undefined` so they are never serialized into
- * the JSON body. This guarantees no `null`/`undefined` is sent for optional
- * numeric fields — they are simply omitted.
- */
-function compactPayload<T extends Record<string, unknown>>(obj: T): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([, v]) => v !== undefined)
-  ) as Partial<T>;
-}
-
-const FREQUENCY_OPTIONS = [
-  { value: 'WEEKLY', label: 'Weekly' },
-  { value: 'FORTNIGHTLY', label: 'Fortnightly' },
-  { value: 'MONTHLY', label: 'Monthly' },
-  { value: 'ANNUAL', label: 'Annual' },
+const STEPS: StepDef[] = [
+  { label: 'Personal Details', help: 'Tell us a little about yourself so we can tailor your assessment.', icon: Icon.user },
+  { label: 'Dependants', help: 'Dependants affect your minimum living expenses in the calculation.', icon: Icon.users },
+  { label: 'Income', help: 'Add every income stream per applicant. Variable income is shaded automatically.', icon: Icon.income },
+  { label: 'Properties', help: 'Manage your portfolio. Tick the items to include in the borrowing calculation, then recalculate.', icon: Icon.home },
+  { label: 'Existing Loans', help: 'Existing home loans add monthly commitments when included in servicing.', icon: Icon.doc },
+  { label: 'Proposed Loans', help: 'The proposed loan to assess. The first ticked loan is used by the calculator.', icon: Icon.plus },
+  { label: 'Other Liabilities', help: 'Credit cards, car / personal loans and other liabilities used in serviceability.', icon: Icon.card },
+  { label: 'Living Expenses', help: 'Declared monthly living expenses. A HEM-style floor still applies.', icon: Icon.receipt },
+  { label: 'Summary & Notes', help: 'Review, jot a deal summary and recalculate your borrowing capacity.', icon: Icon.check },
 ];
 
 const RESIDENCY_OPTIONS = [
@@ -98,48 +102,26 @@ const EMPLOYMENT_OPTIONS = [
   { value: 'RETIRED', label: 'Retired' },
 ];
 
-const INCOME_TYPE_OPTIONS = [
-  { value: 'SALARY', label: 'Salary' },
-  { value: 'BONUS', label: 'Bonus' },
-  { value: 'COMMISSION', label: 'Commission' },
-  { value: 'RENTAL', label: 'Rental' },
-  { value: 'INVESTMENT', label: 'Investment' },
-  { value: 'GOVERNMENT', label: 'Government' },
-  { value: 'OTHER', label: 'Other' },
-];
+const NOTES_STORAGE_KEY = 'transformbiz.dealSummaryNotes';
 
-const OWNER_OPTIONS = [
-  { value: 'SELF', label: 'Self' },
-  { value: 'PARTNER', label: 'Partner' },
-];
+/** Pull the most specific human-readable message out of an Axios error. */
+function extractApiError(err: unknown, fallback: string): string {
+  const ax = err as AxiosError<{ error?: string; details?: { message: string }[] }>;
+  return ax.response?.data?.details?.[0]?.message || ax.response?.data?.error || fallback;
+}
 
-const DEBT_TYPE_OPTIONS = [
-  { value: 'HOME_LOAN', label: 'Home Loan' },
-  { value: 'PERSONAL_LOAN', label: 'Personal Loan' },
-  { value: 'CAR_LOAN', label: 'Car Loan' },
-  { value: 'CREDIT_CARD', label: 'Credit Card' },
-  { value: 'HECS', label: 'HECS' },
-  { value: 'OTHER', label: 'Other' },
-];
-
-const PROPERTY_TYPE_OPTIONS = [
-  { value: 'OWNER_OCCUPIED', label: 'Owner Occupied' },
-  { value: 'INVESTMENT', label: 'Investment' },
-  { value: 'RENTAL', label: 'Rental' },
-];
-
-/** Horizontal numbered step indicator with a connecting line. */
+/** Animated numbered step indicator with a connecting line that fills smoothly. */
 function StepProgress({
   steps, current, onSelect,
-}: { steps: string[]; current: number; onSelect: (i: number) => void }) {
+}: { steps: StepDef[]; current: number; onSelect: (i: number) => void }) {
   return (
     <nav aria-label="Profile progress" className="overflow-x-auto">
       <ol className="flex min-w-max items-center gap-0 sm:min-w-0">
-        {steps.map((label, i) => {
+        {steps.map((s, i) => {
           const isComplete = i < current;
           const isCurrent = i === current;
           return (
-            <li key={label} className="flex flex-1 items-center">
+            <li key={s.label} className="flex flex-1 items-center">
               <button
                 type="button"
                 onClick={() => onSelect(i)}
@@ -148,33 +130,40 @@ function StepProgress({
               >
                 <span
                   className={[
-                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors',
+                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all duration-300',
                     isCurrent
-                      ? 'border-brand bg-brand text-white shadow-sm'
+                      ? 'border-brand bg-brand text-white shadow-md shadow-brand/30 scale-110'
                       : isComplete
                         ? 'border-brand bg-brand-light text-brand'
-                        : 'border-gray-300 bg-white text-gray-400 group-hover:border-gray-400',
+                        : 'border-slate-300 bg-white text-slate-400 group-hover:border-slate-400',
                   ].join(' ')}
                 >
                   {isComplete ? (
-                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <svg className="h-5 w-5 animate-pop" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 011.4-1.4l3.3 3.29 6.8-6.8a1 1 0 011.4 0z" clipRule="evenodd" />
                     </svg>
                   ) : (
-                    i + 1
+                    <span className="flex h-5 w-5 items-center justify-center">
+                      <SectionIcon path={s.icon} className="h-4 w-4" />
+                    </span>
                   )}
                 </span>
                 <span
                   className={[
-                    'hidden text-xs font-medium sm:block',
-                    isCurrent ? 'text-brand' : isComplete ? 'text-gray-700' : 'text-gray-400',
+                    'hidden text-xs font-medium transition-colors sm:block',
+                    isCurrent ? 'text-brand' : isComplete ? 'text-slate-700' : 'text-slate-400',
                   ].join(' ')}
                 >
-                  {label}
+                  {s.label}
                 </span>
               </button>
               {i < steps.length - 1 && (
-                <span className={`h-0.5 flex-1 ${i < current ? 'bg-brand' : 'bg-gray-200'}`} />
+                <span className="relative h-0.5 flex-1 overflow-hidden rounded-full bg-slate-200">
+                  <span
+                    className="bar-fill absolute inset-y-0 left-0 rounded-full bg-brand"
+                    style={{ width: i < current ? '100%' : '0%' }}
+                  />
+                </span>
               )}
             </li>
           );
@@ -191,7 +180,6 @@ export default function ProfilePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Profile data
   const [profileData, setProfileData] = useState<ClientProfileInput>({
     phone: '', address: '', dateOfBirth: '',
     residencyStatus: 'CITIZEN', numberOfAdultDependants: 0,
@@ -200,24 +188,11 @@ export default function ProfilePage() {
   });
   const [profileExists, setProfileExists] = useState(false);
 
-  // Income sources
-  const [incomeSources, setIncomeSources] = useState<(IncomeSource | IncomeSourceInput & { id?: string })[]>([]);
-  // Existing debts
-  const [existingDebts, setExistingDebts] = useState<(ExistingDebt | ExistingDebtInput & { id?: string })[]>([]);
-  // Properties
-  const [properties, setProperties] = useState<(Property | PropertyInput & { id?: string })[]>([]);
-  // Expenses
-  const [expenses, setExpenses] = useState<ExpenseSummaryInput>({
-    groceries: 0, groceriesFreq: 'MONTHLY',
-    utilities: 0, utilitiesFreq: 'MONTHLY',
-    transport: 0, transportFreq: 'MONTHLY',
-    insurance: 0, insuranceFreq: 'MONTHLY',
-    education: 0, educationFreq: 'MONTHLY',
-    childcare: 0, childcareFreq: 'MONTHLY',
-    entertainment: 0, entertainmentFreq: 'MONTHLY',
-    otherExpenses: 0, otherExpensesFreq: 'MONTHLY',
-  });
-  const [expensesExist, setExpensesExist] = useState(false);
+  // Deal summary / notes (client-side only, persisted to localStorage).
+  const [notes, setNotes] = useState('');
+  // Summary recalculation result.
+  const [recalc, setRecalc] = useState<ServicingCalcResult | null>(null);
+  const [recalcing, setRecalcing] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -237,57 +212,20 @@ export default function ProfilePage() {
     } catch { /* profile doesn't exist yet */ }
   }, []);
 
-  const fetchIncomeSources = useCallback(async () => {
-    try {
-      const res = await api.get('/client/income-sources');
-      const sources = res.data?.incomeSources;
-      setIncomeSources(Array.isArray(sources) ? sources : []);
-    } catch { /* no data */ }
-  }, []);
-
-  const fetchDebts = useCallback(async () => {
-    try {
-      const res = await api.get('/client/existing-debts');
-      const debts = res.data?.existingDebts;
-      setExistingDebts(Array.isArray(debts) ? debts : []);
-    } catch { /* no data */ }
-  }, []);
-
-  const fetchProperties = useCallback(async () => {
-    try {
-      const res = await api.get('/client/properties');
-      const props = res.data?.properties;
-      setProperties(Array.isArray(props) ? props : []);
-    } catch { /* no data */ }
-  }, []);
-
-  const fetchExpenses = useCallback(async () => {
-    try {
-      const res = await api.get('/client/expense-summary');
-      if (res.data?.expenseSummary) {
-        const e = res.data.expenseSummary as ExpenseSummary;
-        setExpenses({
-          groceries: e.groceries, groceriesFreq: e.groceriesFreq,
-          utilities: e.utilities, utilitiesFreq: e.utilitiesFreq,
-          transport: e.transport, transportFreq: e.transportFreq,
-          insurance: e.insurance, insuranceFreq: e.insuranceFreq,
-          education: e.education, educationFreq: e.educationFreq,
-          childcare: e.childcare, childcareFreq: e.childcareFreq,
-          entertainment: e.entertainment, entertainmentFreq: e.entertainmentFreq,
-          otherExpenses: e.otherExpenses, otherExpensesFreq: e.otherExpensesFreq,
-        });
-        setExpensesExist(true);
-      }
-    } catch { /* no data */ }
-  }, []);
-
   useEffect(() => {
     const loadAll = async () => {
-      await Promise.all([fetchProfile(), fetchIncomeSources(), fetchDebts(), fetchProperties(), fetchExpenses()]);
+      await fetchProfile();
+      try {
+        const stored = typeof window !== 'undefined' ? window.localStorage.getItem(NOTES_STORAGE_KEY) : null;
+        if (stored) setNotes(stored);
+      } catch { /* ignore storage errors */ }
       setLoading(false);
     };
     loadAll();
-  }, [fetchProfile, fetchIncomeSources, fetchDebts, fetchProperties, fetchExpenses]);
+  }, [fetchProfile]);
+
+  // Clear transient banners when changing steps.
+  useEffect(() => { setError(''); setSuccess(''); }, [step]);
 
   const savePersonalDetails = async () => {
     setSaving(true); setError(''); setSuccess('');
@@ -316,197 +254,69 @@ export default function ProfilePage() {
     finally { setSaving(false); }
   };
 
-  const addIncomeSource = () => {
-    setIncomeSources([...incomeSources, { owner: 'SELF', type: 'SALARY', amount: 0, frequency: 'ANNUAL' as Frequency }]);
+  const saveNotes = (value: string) => {
+    setNotes(value);
+    try { window.localStorage.setItem(NOTES_STORAGE_KEY, value); } catch { /* ignore */ }
   };
 
-  const removeIncomeSource = async (index: number) => {
-    const item = incomeSources[index];
-    if ('id' in item && item.id) {
-      try { await api.delete(`/client/income-sources/${item.id}`); } catch { /* ignore */ }
-    }
-    setIncomeSources(incomeSources.filter((_, i) => i !== index));
-  };
-
-  const saveIncomeSources = async () => {
-    setSaving(true); setError(''); setSuccess('');
+  const handleRecalc = async () => {
+    setRecalcing(true); setError('');
     try {
-      for (const source of incomeSources) {
-        if ('id' in source && source.id) {
-          await api.put(`/client/income-sources/${source.id}`, {
-            owner: source.owner, type: source.type,
-            amount: Number(source.amount), frequency: source.frequency,
-          });
-        } else {
-          const res = await api.post('/client/income-sources', {
-            owner: source.owner, type: source.type,
-            amount: Number(source.amount), frequency: source.frequency,
-          });
-          source.id = res.data.incomeSource.id;
-        }
-      }
-      await fetchIncomeSources();
-      setSuccess('Income sources saved successfully.');
-    } catch (err) { setError(extractApiError(err, 'Failed to save income sources.')); }
-    finally { setSaving(false); }
-  };
-
-  const addDebt = () => {
-    setExistingDebts([...existingDebts, { type: 'HOME_LOAN', outstandingBalance: 0, monthlyRepayment: null, interestRate: null, creditLimit: null }]);
-  };
-
-  const removeDebt = async (index: number) => {
-    const item = existingDebts[index];
-    if ('id' in item && item.id) {
-      try { await api.delete(`/client/existing-debts/${item.id}`); } catch { /* ignore */ }
-    }
-    setExistingDebts(existingDebts.filter((_, i) => i !== index));
-  };
-
-  const saveDebts = async () => {
-    setSaving(true); setError(''); setSuccess('');
-    try {
-      for (const debt of existingDebts) {
-        // Only include optional numeric fields when the user entered a real
-        // number; never send null/NaN. outstandingBalance is required and
-        // defaults to 0 when blank.
-        const payload = compactPayload({
-          type: debt.type,
-          outstandingBalance: requiredNumber(debt.outstandingBalance, 0),
-          monthlyRepayment: optionalNumber(debt.monthlyRepayment),
-          interestRate: optionalNumber(debt.interestRate),
-          creditLimit: optionalNumber(debt.creditLimit),
-        });
-        if ('id' in debt && debt.id) {
-          await api.put(`/client/existing-debts/${debt.id}`, payload);
-        } else {
-          const res = await api.post('/client/existing-debts', payload);
-          debt.id = res.data.debt.id;
-        }
-      }
-      await fetchDebts();
-      setSuccess('Existing debts saved successfully.');
-    } catch (err) { setError(extractApiError(err, 'Failed to save existing debts.')); }
-    finally { setSaving(false); }
-  };
-
-  const addProperty = () => {
-    setProperties([...properties, { type: 'OWNER_OCCUPIED', address: '', estimatedValue: 0, mortgageBalance: null, rentalIncome: null }]);
-  };
-
-  const removeProperty = async (index: number) => {
-    const item = properties[index];
-    if ('id' in item && item.id) {
-      try { await api.delete(`/client/properties/${item.id}`); } catch { /* ignore */ }
-    }
-    setProperties(properties.filter((_, i) => i !== index));
-  };
-
-  const saveProperties = async () => {
-    setSaving(true); setError(''); setSuccess('');
-    try {
-      for (const prop of properties) {
-        // Required fields validated client-side with clear messages so we never
-        // send a 0/null estimatedValue or an empty address to the backend.
-        const address = (prop.address || '').trim();
-        if (!address) {
-          setError('Each property needs an address.');
-          setSaving(false);
-          return;
-        }
-        const estimatedValue = optionalNumber(prop.estimatedValue);
-        if (estimatedValue === undefined || estimatedValue <= 0) {
-          setError('Each property needs an estimated value greater than 0.');
-          setSaving(false);
-          return;
-        }
-        // Only include optional numeric fields when a real number was entered.
-        const payload = compactPayload({
-          type: prop.type,
-          address,
-          estimatedValue,
-          mortgageBalance: optionalNumber(prop.mortgageBalance),
-          rentalIncome: optionalNumber(prop.rentalIncome),
-        });
-        if ('id' in prop && prop.id) {
-          await api.put(`/client/properties/${prop.id}`, payload);
-        } else {
-          const res = await api.post('/client/properties', payload);
-          prop.id = res.data.property.id;
-        }
-      }
-      await fetchProperties();
-      setSuccess('Properties saved successfully.');
-    } catch (err) { setError(extractApiError(err, 'Failed to save properties.')); }
-    finally { setSaving(false); }
-  };
-
-  const saveExpenses = async () => {
-    setSaving(true); setError(''); setSuccess('');
-    try {
-      const payload = {
-        groceries: Number(expenses.groceries), groceriesFreq: expenses.groceriesFreq,
-        utilities: Number(expenses.utilities), utilitiesFreq: expenses.utilitiesFreq,
-        transport: Number(expenses.transport), transportFreq: expenses.transportFreq,
-        insurance: Number(expenses.insurance), insuranceFreq: expenses.insuranceFreq,
-        education: Number(expenses.education), educationFreq: expenses.educationFreq,
-        childcare: Number(expenses.childcare), childcareFreq: expenses.childcareFreq,
-        entertainment: Number(expenses.entertainment), entertainmentFreq: expenses.entertainmentFreq,
-        otherExpenses: Number(expenses.otherExpenses), otherExpensesFreq: expenses.otherExpensesFreq,
-      };
-      if (expensesExist) {
-        await api.put('/client/expense-summary', payload);
-      } else {
-        await api.post('/client/expense-summary', payload);
-        setExpensesExist(true);
-      }
-      setSuccess('Expenses saved successfully.');
-    } catch (err) { setError(extractApiError(err, 'Failed to save expenses.')); }
-    finally { setSaving(false); }
+      setRecalc(await recalculateBorrowingCapacity());
+    } catch (err) { setError(extractApiError(err, 'Unable to recalculate borrowing capacity.')); }
+    finally { setRecalcing(false); }
   };
 
   const handleNext = async () => {
     if (step === 0) await savePersonalDetails();
     else if (step === 1) await saveDependants();
-    else if (step === 2) await saveIncomeSources();
-    else if (step === 3) await saveDebts();
-    else if (step === 4) await saveProperties();
-    else if (step === 5) await saveExpenses();
     if (step < STEPS.length - 1) setStep(step + 1);
   };
+
+  // Steps 0 & 1 are profile forms that save here; the rest are self-saving
+  // section components, so the primary button is a plain navigation control.
+  const isProfileFormStep = step === 0 || step === 1;
+  const isLastStep = step === STEPS.length - 1;
 
   if (loading) return <Spinner size="lg" className="py-20" />;
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="animate-enter">
         <h1 className="text-2xl font-bold text-slate-900">Financial Profile</h1>
-        <p className="mt-1 text-slate-600">Complete your profile to get accurate borrowing calculations.</p>
+        <p className="mt-1 text-slate-600">
+          Everything we need for your borrowing assessment lives here — personal details, income,
+          properties, loans, liabilities and expenses, all in one place.
+        </p>
         <p className="mt-1 text-sm text-slate-500">
-          For detailed income types, the property portfolio, liabilities and home loans, see{' '}
-          <a href="/dashboard/financials" className="font-medium text-brand hover:text-brand-dark">Servicing &amp; Financials</a>.
+          Tick the items to include in the borrowing calculation as you go.
         </p>
       </div>
 
       {/* Step progress indicator */}
-      <Card className="py-5">
+      <Card className="animate-enter py-5" style={{ animationDelay: '60ms' }}>
         <StepProgress steps={STEPS} current={step} onSelect={setStep} />
       </Card>
 
       {error && <Alert variant="error">{error}</Alert>}
       {success && <Alert variant="success">{success}</Alert>}
 
-      {/* Step Content */}
-      <Card>
-        <div className="mb-5 border-b border-white/40 pb-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand">Step {step + 1} of {STEPS.length}</p>
-          <h3 className="mt-1 text-lg font-semibold text-slate-900">{STEPS[step]}</h3>
-          <p className="mt-1 text-sm text-slate-500">{STEP_HELP[step]}</p>
+      {/* Step Content — re-keyed so it re-animates on each step change. */}
+      <Card key={step} className="animate-enter">
+        <div className="mb-5 flex items-start gap-3 border-b border-white/40 pb-4">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-light text-brand">
+            <SectionIcon path={STEPS[step].icon} className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand">Step {step + 1} of {STEPS.length}</p>
+            <h3 className="mt-0.5 text-lg font-semibold text-slate-900">{STEPS[step].label}</h3>
+            <p className="mt-1 text-sm text-slate-500">{STEPS[step].help}</p>
+          </div>
         </div>
 
         {step === 0 && (
           <div className="space-y-4">
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <Input label="Phone" type="tel" value={profileData.phone || ''} onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })} />
               <Input label="Date of Birth" type="date" value={profileData.dateOfBirth || ''} onChange={(e) => setProfileData({ ...profileData, dateOfBirth: e.target.value })} />
               <Input label="Address" value={profileData.address || ''} onChange={(e) => setProfileData({ ...profileData, address: e.target.value })} className="md:col-span-2" />
@@ -519,108 +329,57 @@ export default function ProfilePage() {
 
         {step === 1 && (
           <div className="space-y-4">
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <Input label="Number of Adult Dependants" type="number" min="0" value={String(profileData.numberOfAdultDependants)} onChange={(e) => setProfileData({ ...profileData, numberOfAdultDependants: parseInt(e.target.value) || 0 })} />
               <Input label="Number of Child Dependants" type="number" min="0" value={String(profileData.numberOfChildDependants)} onChange={(e) => setProfileData({ ...profileData, numberOfChildDependants: parseInt(e.target.value) || 0 })} />
             </div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={profileData.privateSchoolingFlag} onChange={(e) => setProfileData({ ...profileData, privateSchoolingFlag: e.target.checked })} className="rounded border-gray-300 text-brand focus:ring-brand" />
-              <span className="text-sm text-gray-700">Private schooling</span>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input type="checkbox" checked={profileData.privateSchoolingFlag} onChange={(e) => setProfileData({ ...profileData, privateSchoolingFlag: e.target.checked })} className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" />
+              <span className="text-sm text-slate-700">Private schooling</span>
             </label>
           </div>
         )}
 
-        {step === 2 && (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-gray-700">{incomeSources.length} income source{incomeSources.length === 1 ? '' : 's'}</span>
-              <Button variant="secondary" size="sm" onClick={addIncomeSource}>+ Add Income</Button>
-            </div>
-            {incomeSources.map((source, idx) => (
-              <div key={idx} className="rounded-xl border border-white/50 bg-white/40 p-4 space-y-3 backdrop-blur-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-slate-700">Income #{idx + 1}</span>
-                  <Button variant="danger" size="sm" onClick={() => removeIncomeSource(idx)}>Remove</Button>
-                </div>
-                <div className="grid md:grid-cols-2 gap-3">
-                  <Select label="Owner" options={OWNER_OPTIONS} value={source.owner} onChange={(e) => { const arr = [...incomeSources]; arr[idx] = { ...arr[idx], owner: e.target.value as IncomeSourceInput['owner'] }; setIncomeSources(arr); }} />
-                  <Select label="Type" options={INCOME_TYPE_OPTIONS} value={source.type} onChange={(e) => { const arr = [...incomeSources]; arr[idx] = { ...arr[idx], type: e.target.value as IncomeSourceInput['type'] }; setIncomeSources(arr); }} />
-                  <Input label="Amount" type="number" min="0" value={String(source.amount)} onChange={(e) => { const arr = [...incomeSources]; arr[idx] = { ...arr[idx], amount: parseFloat(e.target.value) || 0 }; setIncomeSources(arr); }} />
-                  <Select label="Frequency" options={FREQUENCY_OPTIONS} value={source.frequency} onChange={(e) => { const arr = [...incomeSources]; arr[idx] = { ...arr[idx], frequency: e.target.value as Frequency }; setIncomeSources(arr); }} />
-                </div>
-              </div>
-            ))}
-            {incomeSources.length === 0 && <p className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-gray-500 text-sm">No income sources added. Click &quot;Add Income&quot; to get started.</p>}
-          </div>
-        )}
+        {step === 2 && <IncomeEntriesSection />}
+        {step === 3 && <PropertyPortfolioTable />}
+        {step === 4 && <ExistingHomeLoansTable />}
+        {step === 5 && <ProposedHomeLoansTable />}
+        {step === 6 && <OtherLiabilitiesTable />}
+        {step === 7 && <LivingExpensesForm />}
 
-        {step === 3 && (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-gray-700">{existingDebts.length} debt{existingDebts.length === 1 ? '' : 's'}</span>
-              <Button variant="secondary" size="sm" onClick={addDebt}>+ Add Debt</Button>
-            </div>
-            {existingDebts.map((debt, idx) => (
-              <div key={idx} className="rounded-xl border border-white/50 bg-white/40 p-4 space-y-3 backdrop-blur-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-slate-700">Debt #{idx + 1}</span>
-                  <Button variant="danger" size="sm" onClick={() => removeDebt(idx)}>Remove</Button>
+        {step === 8 && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-brand/15 bg-gradient-to-br from-brand-light/70 to-accent-light/50 p-5">
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand">Estimated max borrowing capacity</p>
+                  <p className="mt-1 text-4xl font-bold text-slate-900">
+                    {recalc
+                      ? <AnimatedNumber value={recalc.maxBorrowingCapacity} prefix="$" />
+                      : <span className="text-slate-400">$0</span>}
+                  </p>
+                  {recalc && (
+                    <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
+                      <span>Monthly surplus: {money(recalc.netMonthlySurplus)}</span>
+                      <span>Monthly commitments: {money(recalc.monthlyCommitments)}</span>
+                      <span>DTI: {recalc.dtiRatio.toFixed(2)}x</span>
+                    </div>
+                  )}
                 </div>
-                <div className="grid md:grid-cols-2 gap-3">
-                  <Select label="Type" options={DEBT_TYPE_OPTIONS} value={debt.type} onChange={(e) => { const arr = [...existingDebts]; arr[idx] = { ...arr[idx], type: e.target.value as ExistingDebtInput['type'] }; setExistingDebts(arr); }} />
-                  <Input label="Outstanding Balance" type="number" min="0" value={String(debt.outstandingBalance)} onChange={(e) => { const arr = [...existingDebts]; arr[idx] = { ...arr[idx], outstandingBalance: parseFloat(e.target.value) || 0 }; setExistingDebts(arr); }} />
-                  <Input label="Monthly Repayment" type="number" min="0" placeholder="Optional" value={String(debt.monthlyRepayment || '')} onChange={(e) => { const arr = [...existingDebts]; arr[idx] = { ...arr[idx], monthlyRepayment: parseFloat(e.target.value) || null }; setExistingDebts(arr); }} />
-                  <Input label="Credit Limit" type="number" min="0" placeholder="Optional" value={String(debt.creditLimit || '')} onChange={(e) => { const arr = [...existingDebts]; arr[idx] = { ...arr[idx], creditLimit: parseFloat(e.target.value) || null }; setExistingDebts(arr); }} />
-                </div>
+                <Button onClick={handleRecalc} loading={recalcing}>Recalculate borrowing capacity</Button>
               </div>
-            ))}
-            {existingDebts.length === 0 && <p className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-gray-500 text-sm">No existing debts. Click &quot;Add Debt&quot; if applicable.</p>}
-          </div>
-        )}
-
-        {step === 4 && (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-gray-700">{properties.length} propert{properties.length === 1 ? 'y' : 'ies'}</span>
-              <Button variant="secondary" size="sm" onClick={addProperty}>+ Add Property</Button>
+              <p className="mt-3 text-xs text-slate-500">Indicative estimate only - not a credit decision.</p>
             </div>
-            {properties.map((prop, idx) => (
-              <div key={idx} className="rounded-xl border border-white/50 bg-white/40 p-4 space-y-3 backdrop-blur-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-slate-700">Property #{idx + 1}</span>
-                  <Button variant="danger" size="sm" onClick={() => removeProperty(idx)}>Remove</Button>
-                </div>
-                <div className="grid md:grid-cols-2 gap-3">
-                  <Select label="Type" options={PROPERTY_TYPE_OPTIONS} value={prop.type} onChange={(e) => { const arr = [...properties]; arr[idx] = { ...arr[idx], type: e.target.value as PropertyInput['type'] }; setProperties(arr); }} />
-                  <Input label="Address" value={prop.address} onChange={(e) => { const arr = [...properties]; arr[idx] = { ...arr[idx], address: e.target.value }; setProperties(arr); }} />
-                  <Input label="Estimated Value" type="number" min="0" value={String(prop.estimatedValue)} onChange={(e) => { const arr = [...properties]; arr[idx] = { ...arr[idx], estimatedValue: parseFloat(e.target.value) || 0 }; setProperties(arr); }} />
-                  <Input label="Mortgage Balance" type="number" min="0" placeholder="Optional" value={String(prop.mortgageBalance || '')} onChange={(e) => { const arr = [...properties]; arr[idx] = { ...arr[idx], mortgageBalance: parseFloat(e.target.value) || null }; setProperties(arr); }} />
-                  <Input label="Rental Income (monthly)" type="number" min="0" placeholder="Optional" value={String(prop.rentalIncome || '')} onChange={(e) => { const arr = [...properties]; arr[idx] = { ...arr[idx], rentalIncome: parseFloat(e.target.value) || null }; setProperties(arr); }} />
-                </div>
-              </div>
-            ))}
-            {properties.length === 0 && <p className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-gray-500 text-sm">No properties. Click &quot;Add Property&quot; if applicable.</p>}
-          </div>
-        )}
 
-        {step === 5 && (
-          <div className="space-y-4">
-            <div className="grid md:grid-cols-2 gap-4">
-              {([
-                ['groceries', 'groceriesFreq', 'Groceries'],
-                ['utilities', 'utilitiesFreq', 'Utilities'],
-                ['transport', 'transportFreq', 'Transport'],
-                ['insurance', 'insuranceFreq', 'Insurance'],
-                ['education', 'educationFreq', 'Education'],
-                ['childcare', 'childcareFreq', 'Childcare'],
-                ['entertainment', 'entertainmentFreq', 'Entertainment'],
-                ['otherExpenses', 'otherExpensesFreq', 'Other Expenses'],
-              ] as [keyof ExpenseSummaryInput, keyof ExpenseSummaryInput, string][]).map(([amtKey, freqKey, label]) => (
-                <div key={amtKey} className="flex gap-2 items-end">
-                  <Input label={label} type="number" min="0" value={String(expenses[amtKey])} onChange={(e) => setExpenses({ ...expenses, [amtKey]: parseFloat(e.target.value) || 0 })} />
-                  <Select options={FREQUENCY_OPTIONS} value={expenses[freqKey] as string} onChange={(e) => setExpenses({ ...expenses, [freqKey]: e.target.value })} className="w-36" />
-                </div>
-              ))}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Deal summary / notes</label>
+              <textarea
+                className="glass-input min-h-[120px] w-full resize-y rounded-xl border border-white/60 px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition-shadow focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                placeholder="Notes about this deal, goals, or anything your broker should know…"
+                value={notes}
+                onChange={(e) => saveNotes(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-slate-500">Saved to this device automatically.</p>
             </div>
           </div>
         )}
@@ -631,9 +390,15 @@ export default function ProfilePage() {
         <Button variant="secondary" onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0}>
           Previous
         </Button>
-        <Button onClick={handleNext} loading={saving}>
-          {step === STEPS.length - 1 ? 'Save & Finish' : 'Save & Next'}
-        </Button>
+        {!isLastStep ? (
+          <Button onClick={handleNext} loading={saving}>
+            {isProfileFormStep ? 'Save & Next' : 'Next'}
+          </Button>
+        ) : (
+          <Button onClick={handleRecalc} loading={recalcing}>
+            Recalculate borrowing capacity
+          </Button>
+        )}
       </div>
     </div>
   );

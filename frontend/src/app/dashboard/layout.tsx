@@ -46,9 +46,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <Link href="/dashboard/profile" className="text-sm font-medium text-slate-700 hover:text-brand transition-colors">
                   Profile
                 </Link>
-                <Link href="/dashboard/financials" className="text-sm font-medium text-slate-700 hover:text-brand transition-colors">
-                  Servicing
-                </Link>
                 <Link href="/dashboard/calculator" className="text-sm font-medium text-slate-700 hover:text-brand transition-colors">
                   Calculator
                 </Link>
