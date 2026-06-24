@@ -459,7 +459,7 @@ export interface ApplicationStage {
 
 // === Messaging Hub (Mandate 4C) ===
 export type SenderRole = 'CLIENT' | 'ADMIN' | 'SYSTEM';
-export type MessageType = 'text' | 'stage_update' | 'document_request' | 'borrowing_summary' | 'meeting_request';
+export type MessageType = 'text' | 'stage_update' | 'document_request' | 'borrowing_summary' | 'meeting_request' | 'attachment';
 export type MessageStatus = 'sent' | 'delivered' | 'read';
 
 export interface Message {

@@ -575,6 +575,15 @@ h1, h2, h3, h4 {
 
   /* Composer send ripple. */
   .ripple-btn { position: relative; overflow: hidden; }
+
+  /* Live presence pulse — used on the online dot while polling is active. */
+  .animate-ping-slow { animation: pingSlow 1.8s cubic-bezier(0, 0, 0.2, 1) infinite; }
+}
+
+@keyframes pingSlow {
+  0% { box-shadow: 0 0 0 0 var(--accent-emerald); }
+  70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
 @keyframes stagePulse {

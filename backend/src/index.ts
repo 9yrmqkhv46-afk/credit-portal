@@ -61,7 +61,9 @@ app.use(cors({
   origin: config.frontendUrl,
   credentials: true,
 }));
-app.use(express.json());
+// Raise the JSON body limit so the messaging hub can accept small file
+// attachments encoded as base64 data URLs (images / PDFs up to a few MB).
+app.use(express.json({ limit: '12mb' }));
 
 // ---------------------------------------------------------------------------
 // IP-based rate limiter for auth endpoints

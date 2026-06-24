@@ -28,17 +28,27 @@ export default function AdminMessagesPage() {
     })();
   }, []);
 
-  const loadThread = async (id: string) => {
-    setLoadingThread(true);
+  const loadThread = async (id: string, silent = false) => {
+    if (!silent) setLoadingThread(true);
     try {
       const res = await api.get(`/admin/clients/${id}/messages`);
       setMessages(res.data.messages || []);
     } finally {
-      setLoadingThread(false);
+      if (!silent) setLoadingThread(false);
     }
   };
 
   useEffect(() => { if (selected) loadThread(selected); }, [selected]);
+
+  // Live updates: silently re-poll the active thread every few seconds so new
+  // messages from the client appear without a manual refresh.
+  useEffect(() => {
+    if (!selected) return;
+    const interval = window.setInterval(() => {
+      loadThread(selected, true).catch(() => {});
+    }, 4000);
+    return () => window.clearInterval(interval);
+  }, [selected]);
 
   const selectedClient = clients.find((c) => c.id === selected);
 
@@ -46,7 +56,7 @@ export default function AdminMessagesPage() {
     if (!selected) return;
     try {
       await api.post(`/admin/clients/${selected}/messages`, payload);
-      await loadThread(selected);
+      await loadThread(selected, true);
     } catch {
       toast('Could not send message', { accent: 'crimson' });
     }
@@ -56,7 +66,7 @@ export default function AdminMessagesPage() {
     if (!selected) return;
     try {
       await api.patch(`/admin/clients/${selected}/messages/${id}`, data);
-      await loadThread(selected);
+      await loadThread(selected, true);
     } catch { /* ignore */ }
   };
 
@@ -105,7 +115,8 @@ export default function AdminMessagesPage() {
               stageLabel="View timeline"
               stageHref={`/admin/clients/${selectedClient.id}`}
               onSend={handleSend}
-              onReact={(id, emoji) => patchMsg(id, { reactions: [emoji] })}
+              live
+              onReact={(id, reactions) => patchMsg(id, { reactions })}
               onResolve={(id, resolved) => patchMsg(id, { resolved })}
               onFlag={(id, flagged) => patchMsg(id, { flagged })}
             />

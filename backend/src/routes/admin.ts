@@ -380,7 +380,7 @@ function serialiseJson(v: unknown): string | null {
   try { return JSON.stringify(v); } catch { return null; }
 }
 
-const MESSAGE_TYPES = ['text', 'stage_update', 'document_request', 'borrowing_summary', 'meeting_request'] as const;
+const MESSAGE_TYPES = ['text', 'stage_update', 'document_request', 'borrowing_summary', 'meeting_request', 'attachment'] as const;
 
 const adminSendSchema = z.object({
   body: z.string().nullable().optional(),
