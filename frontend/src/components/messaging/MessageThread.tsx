@@ -10,16 +10,39 @@ interface Props {
   viewerRole: SenderRole;
   headerTitle: string;
   headerSubtitle?: string;
+  /** Contact email used to build the Microsoft Teams call deep-link. */
+  contactEmail?: string;
+  /** Contact name used in the Teams meeting subject. */
+  contactName?: string;
   stageLabel?: string;
   stageHref?: string;
   admin?: boolean;
   onSend: (payload: { body?: string; type: MessageType; cardData?: unknown }) => void;
+  /** Upload a picked file as a document attachment and post it to the thread. */
+  onAttachFile?: (file: File) => void | Promise<void>;
   onReact?: (messageId: string, emoji: string) => void;
   onResolve?: (messageId: string, resolved: boolean) => void;
   onFlag?: (messageId: string, flagged: boolean) => void;
 }
 
 const REACTIONS = ['👍', '✅', '❓', '🏠', '📋'];
+
+/** Build a Microsoft Teams 1:1 call deep-link (public link, no API/keys). */
+function teamsCallUrl(email?: string): string {
+  return email
+    ? `https://teams.microsoft.com/l/call/0/0?users=${encodeURIComponent(email)}`
+    : 'https://teams.microsoft.com/l/call/0/0';
+}
+
+/** Build a Microsoft Teams "new meeting" deep-link with a pre-filled subject. */
+function teamsMeetingUrl(name?: string): string {
+  const subject = `TransformBiz – ${name || 'Consultation'}`;
+  return `https://teams.microsoft.com/l/meeting/new?subject=${encodeURIComponent(subject)}`;
+}
+
+function openInNewTab(url: string): void {
+  if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
+}
 
 function dayLabel(date: Date): string {
   const today = new Date();
@@ -46,8 +69,8 @@ function Ticks({ status }: { status: Message['status'] }) {
 }
 
 export function MessageThread({
-  messages, viewerRole, headerTitle, headerSubtitle, stageLabel, stageHref,
-  admin = false, onSend, onReact, onResolve, onFlag,
+  messages, viewerRole, headerTitle, headerSubtitle, contactEmail, contactName, stageLabel, stageHref,
+  admin = false, onSend, onAttachFile, onReact, onResolve, onFlag,
 }: Props) {
   const [draft, setDraft] = useState('');
   const [showAttach, setShowAttach] = useState(false);
@@ -55,6 +78,7 @@ export function MessageThread({
   const [typing, setTyping] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const ordered = useMemo(
     () => [...messages].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
@@ -93,11 +117,31 @@ export function MessageThread({
     const samples: Record<string, { body: string; cardData: unknown }> = {
       document_request: { body: 'Documents required', cardData: { title: 'Documents required', items: ['Last 2 payslips', 'Bank statement', 'Photo ID'] } },
       borrowing_summary: { body: 'Borrowing summary', cardData: { maxBorrowing: 920000, rate: 6.49, termYears: 30, monthlyRepayment: 5805 } },
+      property_report: { body: 'Property report', cardData: { address: 'Subject property', estimatedValue: 850000, source: 'Domain AVM', confidence: 'Medium' } },
       meeting_request: { body: 'Meeting request', cardData: { title: 'Quick catch-up call', proposed: 'Thu 2:30pm', durationMins: 15 } },
       stage_update: { body: 'Status update', cardData: { stage: 'Unconditional Pre-Approval Received', group: 'Pre-Approval', order: 6, total: 18 } },
     };
     const s = samples[type];
-    send({ body: s.body, type, cardData: s.cardData });
+    if (s) send({ body: s.body, type, cardData: s.cardData });
+  };
+
+  // The "Document" attachment opens a real file picker; the chosen file is
+  // uploaded + posted to the thread by the parent via onAttachFile.
+  const pickDocument = () => {
+    setShowAttach(false);
+    fileRef.current?.click();
+  };
+
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file || !onAttachFile) return;
+    setTyping(true);
+    try {
+      await onAttachFile(file);
+    } finally {
+      window.setTimeout(() => setTyping(false), 400);
+    }
   };
 
   const lastIncoming = ordered.length > 0 && ordered[ordered.length - 1].senderRole !== viewerRole && ordered[ordered.length - 1].senderRole !== 'SYSTEM';
@@ -130,15 +174,33 @@ export function MessageThread({
               {stageLabel}
             </a>
           )}
-          {['phone', 'video', 'profile'].map((k) => (
-            <button key={k} type="button" aria-label={k} className="rounded-lg p-1.5 text-muted ring-1 ring-white/12 hover:bg-white/10 hover:text-primary">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                {k === 'phone' && <path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3 19.5 19.5 0 01-6-6 19.8 19.8 0 01-3-8.6A2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.3 1.8.6 2.6a2 2 0 01-.5 2.1L8 9.6a16 16 0 006 6l1.2-1.2a2 2 0 012.1-.5c.8.3 1.7.5 2.6.6a2 2 0 011.7 2z" strokeLinecap="round" strokeLinejoin="round" />}
-                {k === 'video' && <path d="M23 7l-7 5 7 5V7zM1 5h13a2 2 0 012 2v10a2 2 0 01-2 2H1z" strokeLinecap="round" strokeLinejoin="round" />}
-                {k === 'profile' && <path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.5-9 6v1h18v-1c0-3.5-4-6-9-6z" strokeLinecap="round" strokeLinejoin="round" />}
-              </svg>
-            </button>
-          ))}
+          <button
+            type="button"
+            aria-label={contactEmail ? `Call ${headerTitle} on Microsoft Teams` : 'Start a Microsoft Teams call'}
+            title="Call on Microsoft Teams"
+            onClick={() => openInNewTab(teamsCallUrl(contactEmail))}
+            className="rounded-lg p-1.5 text-muted ring-1 ring-white/12 hover:bg-white/10 hover:text-primary"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3 19.5 19.5 0 01-6-6 19.8 19.8 0 01-3-8.6A2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.3 1.8.6 2.6a2 2 0 01-.5 2.1L8 9.6a16 16 0 006 6l1.2-1.2a2 2 0 012.1-.5c.8.3 1.7.5 2.6.6a2 2 0 011.7 2z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            aria-label={`Start a Microsoft Teams video meeting with ${headerTitle}`}
+            title="Video meeting on Microsoft Teams"
+            onClick={() => openInNewTab(teamsMeetingUrl(contactName ?? headerTitle))}
+            className="rounded-lg p-1.5 text-muted ring-1 ring-white/12 hover:bg-white/10 hover:text-primary"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M23 7l-7 5 7 5V7zM1 5h13a2 2 0 012 2v10a2 2 0 01-2 2H1z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button type="button" aria-label="Profile" title="Profile" className="rounded-lg p-1.5 text-muted ring-1 ring-white/12 hover:bg-white/10 hover:text-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.5-9 6v1h18v-1c0-3.5-4-6-9-6z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -257,9 +319,11 @@ export function MessageThread({
       <div className="glass-3 relative border-t border-white/10 p-3">
         {showAttach && (
           <div className="absolute bottom-16 left-3 z-20 w-56 rounded-xl glass-4 p-2">
+            <button type="button" onClick={pickDocument} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-secondary hover:bg-white/10 hover:text-primary">
+              Document (upload file)
+            </button>
             {([
-              ['document_request', 'Document'],
-              ['borrowing_summary', 'Property Report'],
+              ['property_report', 'Property Report'],
               ['borrowing_summary', 'Borrowing Summary'],
               ['meeting_request', 'Meeting Request'],
             ] as [MessageType, string][]).map(([type, label], i) => (
@@ -269,6 +333,7 @@ export function MessageThread({
             ))}
           </div>
         )}
+        <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} aria-hidden="true" />
         <div className="flex items-end gap-2">
           <button
             type="button"

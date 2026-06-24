@@ -36,6 +36,17 @@ export const STAGE_DEFS: StageDef[] = [
 export const TOTAL_STAGES = STAGE_DEFS.length;
 
 /**
+ * Minimal structural shape of an ApplicationStage row used by the helpers
+ * below. Declared explicitly so this module type-checks even before the
+ * Prisma client has been generated (the production build runs
+ * `prisma generate` first, but `tsc`/CI may run before that).
+ */
+interface StageRow {
+  id: string;
+  status: string;
+}
+
+/**
  * Idempotently ensure the 18 timeline stages exist for a user. If none exist,
  * they are created with stage 1 (`info_received`) active and the rest upcoming.
  * Returns the ordered stage rows.
@@ -79,9 +90,9 @@ export async function activateNextUpcoming(userId: string): Promise<void> {
     where: { userId },
     orderBy: { orderIndex: 'asc' },
   });
-  const hasActive = stages.some((s) => s.status === 'active');
+  const hasActive = stages.some((s: StageRow) => s.status === 'active');
   if (hasActive) return;
-  const next = stages.find((s) => s.status === 'upcoming');
+  const next = stages.find((s: StageRow) => s.status === 'upcoming');
   if (next) {
     await prisma.applicationStage.update({
       where: { id: next.id },

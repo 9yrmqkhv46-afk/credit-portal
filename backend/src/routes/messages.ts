@@ -8,7 +8,7 @@ const router = Router();
 router.use(authenticate);
 
 // type values supported by the messaging hub (Mandate 4C).
-const MESSAGE_TYPES = ['text', 'stage_update', 'document_request', 'borrowing_summary', 'meeting_request'] as const;
+const MESSAGE_TYPES = ['text', 'stage_update', 'document_request', 'borrowing_summary', 'meeting_request', 'document', 'property_report'] as const;
 
 // body is a nullable column -> .nullable().optional(); cardData is a nullable
 // JSON string -> accept an object/array and serialise, or a raw string.

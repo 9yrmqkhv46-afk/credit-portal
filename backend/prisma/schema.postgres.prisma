@@ -37,6 +37,7 @@ model User {
   notes         Note[]
   applicationStages ApplicationStage[]
   messages          Message[]
+  attachments       Attachment[]
 }
 
 // ResidencyStatus: CITIZEN | PERMANENT_RESIDENT | TEMPORARY_VISA
@@ -499,4 +500,26 @@ model Message {
   flagged      Boolean  @default(false)
   reactions    String?
   createdAt    DateTime @default(now())
+}
+
+
+// ===========================================================================
+// Attachments (document uploads + messaging attachments)
+// ===========================================================================
+// Files are stored IN THE DATABASE as base64 (dataBase64) so uploads survive
+// Render's ephemeral disk + work against Neon Postgres. An attachment may be
+// linked to a chat Message (messageId) and/or a Profile Document Checklist
+// item (profileDocumentKey). status: Uploaded | Verified.
+model Attachment {
+  id                 String   @id @default(uuid())
+  ownerUserId        String
+  owner              User     @relation(fields: [ownerUserId], references: [id])
+  messageId          String?
+  profileDocumentKey String?
+  filename           String
+  mimeType           String
+  sizeBytes          Int
+  dataBase64         String   @db.Text
+  status             String   @default("Uploaded")
+  createdAt          DateTime @default(now())
 }

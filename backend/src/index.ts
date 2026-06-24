@@ -10,6 +10,7 @@ import servicingRoutes from './routes/servicing';
 import valuationRoutes from './routes/valuation';
 import timelineRoutes from './routes/timeline';
 import messageRoutes from './routes/messages';
+import attachmentRoutes from './routes/attachments';
 import { ensureSeedData } from './lib/bootstrap';
 
 const app = express();
@@ -61,7 +62,9 @@ app.use(cors({
   origin: config.frontendUrl,
   credentials: true,
 }));
-app.use(express.json());
+// Allow base64-encoded document uploads (decoded cap ~5MB; base64 inflates
+// payloads ~33%, so the JSON limit is set higher to leave headroom).
+app.use(express.json({ limit: '8mb' }));
 
 // ---------------------------------------------------------------------------
 // IP-based rate limiter for auth endpoints
@@ -105,6 +108,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/valuation', valuationRoutes);
 app.use('/api/timeline', timelineRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/attachments', attachmentRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

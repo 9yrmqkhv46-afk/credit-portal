@@ -148,7 +148,11 @@ html {
 
 body {
   color: var(--text-primary);
-  background: var(--glass-void);
+  /* Transparent so the fixed .live-wallpaper (z-index:-10) shows through.
+     A non-transparent body background paints OVER negatively-stacked fixed
+     layers, which previously hid the entire animated wallpaper. The deep
+     fallback colour lives on <html> above. */
+  background: transparent;
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

@@ -6,6 +6,7 @@ import { MessageThread } from '@/components/messaging/MessageThread';
 import { useToast } from '@/components/ui/Toast';
 import api from '@/lib/api';
 import { Message, MessageType, AdminClientListItem } from '@/types';
+import { uploadAttachment, formatBytes } from '@/lib/attachments';
 
 export default function AdminMessagesPage() {
   const [clients, setClients] = useState<AdminClientListItem[]>([]);
@@ -60,6 +61,29 @@ export default function AdminMessagesPage() {
     } catch { /* ignore */ }
   };
 
+  // Admin document upload: store the file, post a document card into the
+  // client's thread, then link the attachment to that message so the client
+  // can download it.
+  const handleAttachFile = async (file: File) => {
+    if (!selected) return;
+    try {
+      const att = await uploadAttachment(file);
+      const res = await api.post(`/admin/clients/${selected}/messages`, {
+        body: `Sent a document: ${att.filename} (${formatBytes(att.sizeBytes)})`,
+        type: 'document',
+        cardData: { attachmentId: att.id, filename: att.filename, sizeBytes: att.sizeBytes, mimeType: att.mimeType },
+      });
+      const messageId = res.data?.message?.id;
+      if (messageId) {
+        try { await api.patch(`/attachments/${att.id}`, { messageId }); } catch { /* non-fatal */ }
+      }
+      await loadThread(selected);
+      toast('Document uploaded', { accent: 'teal' });
+    } catch {
+      toast('Could not upload document (max 5MB)', { accent: 'crimson' });
+    }
+  };
+
   if (loading) return <Spinner size="lg" className="py-20" />;
 
   return (
@@ -102,9 +126,12 @@ export default function AdminMessagesPage() {
               admin
               headerTitle={selectedClient.name}
               headerSubtitle={selectedClient.email}
+              contactEmail={selectedClient.email}
+              contactName={selectedClient.name}
               stageLabel="View timeline"
               stageHref={`/admin/clients/${selectedClient.id}`}
               onSend={handleSend}
+              onAttachFile={handleAttachFile}
               onReact={(id, emoji) => patchMsg(id, { reactions: [emoji] })}
               onResolve={(id, resolved) => patchMsg(id, { resolved })}
               onFlag={(id, flagged) => patchMsg(id, { flagged })}

@@ -47,9 +47,9 @@ describe('Messaging hub', () => {
     const threadA = await prisma.message.findMany({ where: { clientUserId: clientA } });
     const threadB = await prisma.message.findMany({ where: { clientUserId: clientB } });
 
-    expect(threadA.every((m) => m.clientUserId === clientA)).toBe(true);
-    expect(threadA.some((m) => m.body === 'For B only')).toBe(false);
-    expect(threadB.some((m) => m.body === 'For B only')).toBe(true);
+    expect(threadA.every((m: { clientUserId: string }) => m.clientUserId === clientA)).toBe(true);
+    expect(threadA.some((m: { body: string | null }) => m.body === 'For B only')).toBe(false);
+    expect(threadB.some((m: { body: string | null }) => m.body === 'For B only')).toBe(true);
   });
 
   test('structured card messages persist cardData JSON and a non-text type', async () => {

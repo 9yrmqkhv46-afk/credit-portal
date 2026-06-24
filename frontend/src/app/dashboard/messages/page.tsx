@@ -6,6 +6,7 @@ import { MessageThread } from '@/components/messaging/MessageThread';
 import { useToast } from '@/components/ui/Toast';
 import api from '@/lib/api';
 import { Message, MessageType } from '@/types';
+import { uploadAttachment, formatBytes } from '@/lib/attachments';
 
 export default function ClientMessagesPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -57,6 +58,23 @@ export default function ClientMessagesPage() {
     } catch { /* ignore */ }
   };
 
+  // Real document upload: store the file (base64) then post a downloadable
+  // document card into the thread.
+  const handleAttachFile = async (file: File) => {
+    try {
+      const att = await uploadAttachment(file);
+      await api.post('/messages', {
+        body: `Sent a document: ${att.filename} (${formatBytes(att.sizeBytes)})`,
+        type: 'document',
+        cardData: { attachmentId: att.id, filename: att.filename, sizeBytes: att.sizeBytes, mimeType: att.mimeType },
+      });
+      await load();
+      toast('Document uploaded', { accent: 'teal' });
+    } catch {
+      toast('Could not upload document (max 5MB)', { accent: 'crimson' });
+    }
+  };
+
   if (loading) return <Spinner size="lg" className="py-20" />;
 
   return (
@@ -70,9 +88,11 @@ export default function ClientMessagesPage() {
         viewerRole="CLIENT"
         headerTitle="TransformBiz"
         headerSubtitle="Your lending specialist"
+        contactName="TransformBiz Specialist"
         stageLabel="View status"
         stageHref="/dashboard/application"
         onSend={handleSend}
+        onAttachFile={handleAttachFile}
         onReact={handleReact}
       />
     </div>

@@ -33,10 +33,10 @@ describe('Application timeline', () => {
     expect(stages).toHaveLength(18);
     expect(stages[0].status).toBe('active');
     expect(stages[0].key).toBe('info_received');
-    expect(stages.slice(1).every((s) => s.status === 'upcoming')).toBe(true);
+    expect(stages.slice(1).every((s: { status: string }) => s.status === 'upcoming')).toBe(true);
     // hasDate flags land on the right stages.
-    expect(stages.find((s) => s.key === 'finance_clause_due')?.hasDate).toBe(true);
-    expect(stages.find((s) => s.key === 'settlement_date')?.hasDate).toBe(true);
+    expect(stages.find((s: { key: string }) => s.key === 'finance_clause_due')?.hasDate).toBe(true);
+    expect(stages.find((s: { key: string }) => s.key === 'settlement_date')?.hasDate).toBe(true);
   });
 
   test('is idempotent — a second ensure does not duplicate stages', async () => {

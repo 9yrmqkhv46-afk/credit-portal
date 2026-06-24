@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import api from '@/lib/api';
 import { useToast } from '@/components/ui/Toast';
+import { uploadAttachment, downloadAttachment, formatBytes } from '@/lib/attachments';
 
 /**
  * Profile Centre (Mandate 4A). Collapsible sections with per-section dirty
@@ -16,6 +17,15 @@ import { useToast } from '@/components/ui/Toast';
  */
 
 type Form = Record<string, string | boolean>;
+
+interface DocItem {
+  label: string;
+  provided: boolean;
+  attachmentId?: string | null;
+  filename?: string | null;
+  sizeBytes?: number | null;
+  status?: string | null;
+}
 
 const GENDER_OPTIONS = [
   { value: '', label: 'Prefer not to say' },
@@ -119,8 +129,11 @@ export function ProfileCentre() {
     employmentStatus: 'FULL_TIME', employerName: '', jobTitle: '', employmentStartDate: '', annualIncome: '',
   });
   const [initial, setInitial] = useState<Form>(form);
-  const [docs, setDocs] = useState<{ label: string; provided: boolean }[]>(DEFAULT_DOCS.map((label) => ({ label, provided: false })));
-  const [initialDocs, setInitialDocs] = useState(docs);
+  const [docs, setDocs] = useState<DocItem[]>(DEFAULT_DOCS.map((label) => ({ label, provided: false })));
+  const [initialDocs, setInitialDocs] = useState<DocItem[]>(docs);
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+  const docFileRef = useRef<HTMLInputElement>(null);
+  const pendingUploadIdx = useRef<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -147,6 +160,20 @@ export function ProfileCentre() {
             } catch { /* ignore */ }
           }
         }
+        // Merge live attachment status (e.g. admin-marked "Verified") so the
+        // checklist reflects persisted server state on reload.
+        try {
+          const aRes = await api.get('/attachments');
+          const list = (aRes.data?.attachments || []) as { id: string; status?: string; filename?: string; sizeBytes?: number }[];
+          const byId = new Map(list.map((a) => [a.id, a]));
+          setDocs((prev) => {
+            const merged = prev.map((d) => (d.attachmentId && byId.has(d.attachmentId)
+              ? { ...d, status: byId.get(d.attachmentId)!.status ?? d.status, filename: byId.get(d.attachmentId)!.filename ?? d.filename, sizeBytes: byId.get(d.attachmentId)!.sizeBytes ?? d.sizeBytes }
+              : d));
+            setInitialDocs(merged);
+            return merged;
+          });
+        } catch { /* attachments are optional */ }
       } catch { /* no profile yet */ }
     })();
   }, []);
@@ -211,6 +238,43 @@ export function ProfileCentre() {
     if (await persist({ documentChecklist: JSON.stringify(docs) }, 'docs')) setInitialDocs(docs);
   };
 
+  // Open the OS file picker for a specific checklist row.
+  const triggerUpload = (idx: number) => {
+    pendingUploadIdx.current = idx;
+    docFileRef.current?.click();
+  };
+
+  const onDocFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const idx = pendingUploadIdx.current;
+    e.target.value = '';
+    pendingUploadIdx.current = null;
+    if (!file || idx == null) return;
+    setUploadingIdx(idx);
+    try {
+      const att = await uploadAttachment(file, { profileDocumentKey: docs[idx].label });
+      const nextDocs = docs.map((d, j) => (j === idx
+        ? { ...d, provided: true, attachmentId: att.id, filename: att.filename, sizeBytes: att.sizeBytes, status: att.status || 'Uploaded' }
+        : d));
+      setDocs(nextDocs);
+      // Persist immediately so the uploaded state survives a reload.
+      if (await persist({ documentChecklist: JSON.stringify(nextDocs) }, 'docs')) setInitialDocs(nextDocs);
+    } catch {
+      toast('Upload failed (max 5MB)', { accent: 'crimson' });
+    } finally {
+      setUploadingIdx(null);
+    }
+  };
+
+  const handleDocDownload = async (d: DocItem) => {
+    if (!d.attachmentId) return;
+    try {
+      await downloadAttachment(d.attachmentId, d.filename || d.label);
+    } catch {
+      toast('Download failed', { accent: 'crimson' });
+    }
+  };
+
   return (
     <div className="space-y-3">
       <Section title="Personal Information" subtitle="Legal name, contact & residency" dirty={dirtyPersonal} saved={!!savedFlags.personal} open={open === 'personal'} onToggle={() => setOpen(open === 'personal' ? null : 'personal')} onSave={savePersonal}>
@@ -249,13 +313,41 @@ export function ProfileCentre() {
       </Section>
 
       <Section title="Document Checklist" subtitle={`${docs.filter((d) => d.provided).length}/${docs.length} provided`} dirty={dirtyDocs} saved={!!savedFlags.docs} open={open === 'docs'} onToggle={() => setOpen(open === 'docs' ? null : 'docs')} onSave={saveDocs}>
+        <input ref={docFileRef} type="file" className="hidden" onChange={onDocFileChange} aria-hidden="true" />
         <ul className="space-y-2">
           {docs.map((d, i) => (
-            <li key={i}>
-              <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-white/4 px-3 py-2 ring-1 ring-white/8 hover:bg-white/8">
-                <input type="checkbox" checked={d.provided} onChange={(e) => setDocs((prev) => prev.map((x, j) => (j === i ? { ...x, provided: e.target.checked } : x)))} className="h-4 w-4 rounded text-brand focus:ring-brand" />
-                <span className={`text-sm ${d.provided ? 'text-primary line-through opacity-70' : 'text-secondary'}`}>{d.label}</span>
-              </label>
+            <li key={i} className="rounded-xl bg-white/4 px-3 py-2 ring-1 ring-white/8">
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex flex-1 cursor-pointer items-center gap-3">
+                  <input type="checkbox" checked={d.provided} onChange={(e) => setDocs((prev) => prev.map((x, j) => (j === i ? { ...x, provided: e.target.checked } : x)))} className="h-4 w-4 rounded text-brand focus:ring-brand" />
+                  <span className={`text-sm ${d.provided ? 'text-primary' : 'text-secondary'}`}>{d.label}</span>
+                </label>
+                {d.status === 'Verified' && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-success-light px-2 py-0.5 text-[11px] font-semibold text-success ring-1 ring-success/40">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    Verified
+                  </span>
+                )}
+                {d.attachmentId && d.status !== 'Verified' && (
+                  <span className="rounded-full bg-brand-light px-2 py-0.5 text-[11px] font-semibold text-brand ring-1 ring-brand/40">Uploaded</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => triggerUpload(i)}
+                  disabled={uploadingIdx === i}
+                  className="rounded-lg px-2.5 py-1 text-xs font-semibold text-brand ring-1 ring-brand/40 hover:bg-brand-light disabled:opacity-50"
+                >
+                  {uploadingIdx === i ? 'Uploading…' : d.attachmentId ? 'Replace' : 'Upload'}
+                </button>
+              </div>
+              {d.attachmentId && (
+                <div className="mt-1.5 flex items-center gap-2 pl-7 text-xs text-muted">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className="shrink-0 text-brand"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round" /><path d="M14 2v6h6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  <span className="truncate text-secondary">{d.filename}</span>
+                  {d.sizeBytes != null && <span className="tnum">· {formatBytes(d.sizeBytes)}</span>}
+                  <button type="button" onClick={() => handleDocDownload(d)} className="font-semibold text-brand hover:underline">Download</button>
+                </div>
+              )}
             </li>
           ))}
         </ul>

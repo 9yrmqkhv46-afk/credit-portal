@@ -459,8 +459,20 @@ export interface ApplicationStage {
 
 // === Messaging Hub (Mandate 4C) ===
 export type SenderRole = 'CLIENT' | 'ADMIN' | 'SYSTEM';
-export type MessageType = 'text' | 'stage_update' | 'document_request' | 'borrowing_summary' | 'meeting_request';
+export type MessageType = 'text' | 'stage_update' | 'document_request' | 'borrowing_summary' | 'meeting_request' | 'document' | 'property_report';
 export type MessageStatus = 'sent' | 'delivered' | 'read';
+
+export interface Attachment {
+  id: string;
+  ownerUserId?: string;
+  messageId?: string | null;
+  profileDocumentKey?: string | null;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  status?: string;
+  createdAt?: string;
+}
 
 export interface Message {
   id: string;

@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Message } from '@/types';
+import { downloadAttachment, formatBytes } from '@/lib/attachments';
 
 /** Parse the JSON cardData string safely. */
 function parseCard(message: Message): Record<string, unknown> | null {
@@ -27,6 +28,10 @@ function money(n: unknown): string {
 export function MessageCard({ message }: { message: Message }) {
   if (message.type === 'text') return null;
   const card = parseCard(message);
+
+  if (message.type === 'document') {
+    return <DocumentCard card={card} />;
+  }
 
   if (message.type === 'stage_update') {
     return (
@@ -91,7 +96,71 @@ export function MessageCard({ message }: { message: Message }) {
     );
   }
 
+  if (message.type === 'property_report') {
+    return (
+      <div className="rounded-xl border border-sapphire/30 bg-accent-light/60 p-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-sapphire">Property report</p>
+        <p className="mt-0.5 text-sm font-semibold text-primary">{String(card?.address ?? 'Property valuation')}</p>
+        <p className="tnum mt-0.5 font-display text-lg font-bold text-primary">{money(card?.estimatedValue)}</p>
+        <div className="tnum mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-secondary">
+          {card?.source != null && <span>{String(card.source)}</span>}
+          {card?.confidence != null && <span>Confidence {String(card.confidence)}</span>}
+        </div>
+      </div>
+    );
+  }
+
   return null;
+}
+
+/**
+ * Downloadable document card. Renders the filename + size and a Download button
+ * that fetches the bytes (auth header) from GET /api/attachments/:id.
+ */
+function DocumentCard({ card }: { card: Record<string, unknown> | null }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  const attachmentId = card?.attachmentId != null ? String(card.attachmentId) : '';
+  const filename = String(card?.filename ?? 'Document');
+  const sizeBytes = typeof card?.sizeBytes === 'number' ? (card.sizeBytes as number) : Number(card?.sizeBytes) || 0;
+
+  const handleDownload = async () => {
+    if (!attachmentId) return;
+    setBusy(true);
+    setError(false);
+    try {
+      await downloadAttachment(attachmentId, filename);
+    } catch {
+      setError(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-brand/30 bg-brand-light/60 p-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand">Document</p>
+      <div className="mt-1 flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/20 text-brand ring-1 ring-brand/30" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round" /><path d="M14 2v6h6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-primary">{filename}</p>
+          <p className="tnum text-xs text-muted">{formatBytes(sizeBytes)}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={handleDownload}
+        disabled={!attachmentId || busy}
+        className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-brand ring-1 ring-brand/40 hover:bg-brand-light disabled:opacity-50"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        {busy ? 'Downloading…' : 'Download'}
+      </button>
+      {error && <p className="mt-1 text-[11px] text-crimson">Download failed.</p>}
+    </div>
+  );
 }
 
 export default MessageCard;
