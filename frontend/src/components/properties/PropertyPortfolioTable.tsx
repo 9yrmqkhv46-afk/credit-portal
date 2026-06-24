@@ -12,6 +12,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
+import { CagrSparkline } from '@/components/ui/CagrSparkline';
 import {
   money, pct, yearsMonths, FREQUENCY_OPTIONS,
   recalculateBorrowingCapacity, setIncludeInServicing, ServicingCalcResult,
@@ -115,6 +116,8 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
   const [loading, setLoading] = useState(!initialProperties);
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // Rows that just flipped back to "included" — drives a single teal glow pulse.
+  const [pulse, setPulse] = useState<Record<string, boolean>>({});
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -180,6 +183,17 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
     const next = !(p.includeInServicing !== false);
     // Optimistic update
     setProperties((prev) => prev.map((x) => (x.id === p.id ? { ...x, includeInServicing: next } : x)));
+    // On re-include, fire a single teal glow pulse on the row.
+    if (next) {
+      setPulse((prev) => ({ ...prev, [p.id]: true }));
+      window.setTimeout(() => {
+        setPulse((prev) => {
+          const cp = { ...prev };
+          delete cp[p.id];
+          return cp;
+        });
+      }, 700);
+    }
     try {
       await setIncludeInServicing('property', p.id, next);
     } catch {
@@ -405,10 +419,22 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
               const lc = loanColumns(p);
               const g = p.growth;
               const isOpen = !!expanded[p.id];
+              const excluded = p.includeInServicing === false;
+              const pulsing = !!pulse[p.id];
               return (
                 <React.Fragment key={p.id}>
-                  <tr className="row-hover border-b border-white/30 text-primary">
-                    <td className="px-3 py-2">{idx + 1}</td>
+                  <tr
+                    className={`row-hover relative border-b border-white/30 text-primary ${excluded ? 'row-excluded' : ''} ${pulsing ? 'reinclude-pulse' : ''}`}
+                  >
+                    <td className="px-3 py-2">
+                      {idx + 1}
+                      {excluded && (
+                        <>
+                          <span className="excluded-strike" aria-hidden="true" />
+                          <span className="excluded-watermark" aria-hidden="true">Excluded</span>
+                        </>
+                      )}
+                    </td>
                     <td className="px-3 py-2">{p.type.replace(/_/g, ' ')}</td>
                     <td className="px-3 py-2">
                       {p.address}
@@ -454,6 +480,13 @@ export function PropertyPortfolioTable({ readOnly = false, initialProperties, in
                               <span>Now {money(p.estimatedValue)}</span>
                             </div>
                             <GrowthBar purchase={g?.purchasePrice ?? p.purchasePrice ?? null} current={p.estimatedValue} />
+                            <CagrSparkline
+                              purchase={g?.purchasePrice ?? p.purchasePrice ?? null}
+                              current={p.estimatedValue}
+                              cagrPercent={g?.cagrPercent}
+                              yearsHeld={g?.yearsHeld}
+                              className="mt-3"
+                            />
                             <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
                               <div>
                                 <p className="text-xs text-muted">Capital growth</p>

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
@@ -9,6 +9,8 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
 }
 
+interface Ripple { x: number; y: number; size: number; id: number; }
+
 export function Button({
   variant = 'primary',
   size = 'md',
@@ -16,10 +18,31 @@ export function Button({
   children,
   className = '',
   disabled,
+  onPointerDown,
   ...props
 }: ButtonProps) {
+  const [ripples, setRipples] = useState<Ripple[]>([]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    // Tasteful press ripple (frozen under prefers-reduced-motion via CSS).
+    if (!disabled && !loading) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const sizePx = Math.max(rect.width, rect.height);
+      const id = Date.now() + Math.random();
+      const next: Ripple = {
+        x: e.clientX - rect.left - sizePx / 2,
+        y: e.clientY - rect.top - sizePx / 2,
+        size: sizePx,
+        id,
+      };
+      setRipples((r) => [...r, next]);
+      window.setTimeout(() => setRipples((r) => r.filter((p) => p.id !== id)), 520);
+    }
+    onPointerDown?.(e);
+  };
+
   const baseStyles =
-    'inline-flex items-center justify-center font-semibold rounded-xl transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]';
+    'relative overflow-hidden inline-flex items-center justify-center font-semibold rounded-xl transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]';
 
   const variantStyles = {
     // Teal gradient with near-black text (Mandate 1: never white-on-teal).
@@ -43,8 +66,17 @@ export function Button({
     <button
       className={`${baseStyles} ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       disabled={disabled || loading}
+      onPointerDown={handlePointerDown}
       {...props}
     >
+      {ripples.map((r) => (
+        <span
+          key={r.id}
+          className="ripple"
+          aria-hidden="true"
+          style={{ left: r.x, top: r.y, width: r.size, height: r.size }}
+        />
+      ))}
       {loading && (
         <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

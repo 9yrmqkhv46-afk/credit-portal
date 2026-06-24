@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Alert';
+import { SplitFlapNumber } from '@/components/ui/SplitFlapNumber';
 import api from '@/lib/api';
 import { LoanScenario } from '@/types';
 import { computeRepayments } from '@/lib/repayments';
@@ -91,7 +92,7 @@ export default function ResultsPage() {
         <div className="relative">
           <p className="text-sm uppercase tracking-widest font-semibold text-emerald-100">Maximum Borrowing Capacity</p>
           <p className="mt-3 text-5xl sm:text-6xl font-bold text-white drop-shadow-sm">
-            {formatCurrency(scenario.maxBorrowingCapacity)}
+            <SplitFlapNumber value={scenario.maxBorrowingCapacity ?? 0} prefix="$" />
           </p>
           <div className="mt-5">
             {passesAll ? (

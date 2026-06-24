@@ -3,16 +3,36 @@
 import React, { useEffect, useRef } from 'react';
 
 /**
- * Fixed, full-viewport spatial canvas backdrop (visionOS "deep space"):
- *   - deep radial-gradient base
+ * Fixed (or embedded), full-viewport spatial canvas backdrop (visionOS
+ * "deep space"):
+ *   - deep radial-gradient base (skipped in `embedded` mode so an underlying
+ *     mesh-gradient / wallpaper image can show through)
  *   - 4 slow drifting low-opacity glow orbs that bounce off the edges
- *   - ~120 upward-drifting "data star" particles that wrap around
+ *   - upward-drifting "data star" particles that wrap around
  *   - a CSS blueprint grid overlay (very low opacity)
  *
- * Rendered once, behind all content (z -10), aria-hidden + pointer-events:none.
- * Under prefers-reduced-motion the animation loop is skipped and a single
- * static frame is drawn instead.
+ * Rendered behind all content (z -10 when standalone), aria-hidden +
+ * pointer-events:none. Under prefers-reduced-motion the animation loop is
+ * skipped and a single static frame is drawn instead.
+ *
+ * The `variant` prop dims the orbs / star field so the app and admin areas
+ * read calmer + darker than the vivid landing page. `embedded` makes the
+ * component fill its positioned parent (used inside <LiveWallpaper/>) and
+ * keeps the canvas transparent so layered gradients remain visible.
  */
+
+export type SpatialVariant = 'landing' | 'app' | 'admin';
+
+interface SpatialBackgroundProps {
+  /** Tunes orb / star intensity. Defaults to 'app'. */
+  variant?: SpatialVariant;
+  /**
+   * When true the component fills its (positioned) parent instead of the
+   * viewport, and the canvas is cleared transparent each frame instead of
+   * painting an opaque deep-space base. Used by <LiveWallpaper/>.
+   */
+  embedded?: boolean;
+}
 
 interface Orb {
   x: number; y: number; vx: number; vy: number; r: number; color: string;
@@ -28,9 +48,14 @@ const ORB_COLORS = [
   'rgba(0, 229, 135, 0.32)',   // emerald
 ];
 
-const STAR_COUNT = 120;
+/** Per-variant intensity tuning (orb brightness, star count + brightness). */
+const VARIANT_TUNING: Record<SpatialVariant, { orbAlpha: number; starCount: number; starAlpha: number }> = {
+  landing: { orbAlpha: 1.0, starCount: 120, starAlpha: 1.0 },
+  app:     { orbAlpha: 0.6, starCount: 80, starAlpha: 0.75 },
+  admin:   { orbAlpha: 0.55, starCount: 70, starAlpha: 0.7 },
+};
 
-export function SpatialBackground() {
+export function SpatialBackground({ variant = 'app', embedded = false }: SpatialBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -38,6 +63,8 @@ export function SpatialBackground() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    const tuning = VARIANT_TUNING[variant] ?? VARIANT_TUNING.app;
 
     let width = 0;
     let height = 0;
@@ -64,13 +91,13 @@ export function SpatialBackground() {
         });
       }
       stars.length = 0;
-      for (let i = 0; i < STAR_COUNT; i++) {
+      for (let i = 0; i < tuning.starCount; i++) {
         stars.push({
           x: Math.random() * width,
           y: Math.random() * height,
           vy: 0.15 + Math.random() * 0.5,
           size: Math.random() * 1.6 + 0.3,
-          alpha: Math.random() * 0.5 + 0.15,
+          alpha: (Math.random() * 0.5 + 0.15) * tuning.starAlpha,
         });
       }
     }
@@ -101,6 +128,7 @@ export function SpatialBackground() {
 
     function drawOrbs() {
       ctx!.globalCompositeOperation = 'lighter';
+      ctx!.globalAlpha = tuning.orbAlpha;
       for (const o of orbs) {
         const rg = ctx!.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r);
         rg.addColorStop(0, o.color);
@@ -110,6 +138,7 @@ export function SpatialBackground() {
         ctx!.arc(o.x, o.y, o.r, 0, Math.PI * 2);
         ctx!.fill();
       }
+      ctx!.globalAlpha = 1;
       ctx!.globalCompositeOperation = 'source-over';
     }
 
@@ -137,7 +166,14 @@ export function SpatialBackground() {
     }
 
     function render() {
-      drawBase();
+      // In embedded mode keep the canvas transparent so the underlying
+      // mesh-gradient / wallpaper image shows through; otherwise paint the
+      // opaque deep-space base (standalone behaviour).
+      if (embedded) {
+        ctx!.clearRect(0, 0, width, height);
+      } else {
+        drawBase();
+      }
       drawOrbs();
       drawStars();
     }
@@ -161,10 +197,14 @@ export function SpatialBackground() {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
     };
-  }, []);
+  }, [variant, embedded]);
+
+  const wrapperClass = embedded
+    ? 'pointer-events-none absolute inset-0 overflow-hidden'
+    : 'pointer-events-none fixed inset-0 -z-10 overflow-hidden';
 
   return (
-    <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+    <div aria-hidden="true" className={wrapperClass}>
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
       {/* Blueprint grid overlay (very low opacity). */}
       <div

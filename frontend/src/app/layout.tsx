@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
-import { SpatialBackground } from '@/components/ui/SpatialBackground';
+import { LiveWallpaper } from '@/components/ui/LiveWallpaper';
 import { ToastProvider } from '@/components/ui/Toast';
 
 export const metadata: Metadata = {
@@ -37,7 +37,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col antialiased">
-        <SpatialBackground />
+        <LiveWallpaper />
         <AuthProvider>
           <ToastProvider>
             {children}

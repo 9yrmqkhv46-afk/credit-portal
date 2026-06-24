@@ -5,6 +5,7 @@ import Link from 'next/link';
 import api from '@/lib/api';
 import { Property, PortfolioGrowth } from '@/types';
 import { Spinner } from '@/components/ui/Spinner';
+import { CagrSparkline } from '@/components/ui/CagrSparkline';
 
 function money(n: number | null | undefined): string {
   if (n === null || n === undefined) return '—';
@@ -34,7 +35,7 @@ function GrowthBar({ purchase, current }: { purchase: number | null; current: nu
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="glass rounded-2xl p-5">
+    <div className="glass hover-lift rounded-2xl p-5">
       <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-1 text-2xl font-bold text-primary">{value}</p>
       {sub && <p className="mt-0.5 text-sm text-secondary">{sub}</p>}
@@ -92,10 +93,14 @@ export default function PropertyGrowthPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {properties.map((p) => {
+            {properties.map((p, idx) => {
               const g = p.growth;
               return (
-                <div key={p.id} className="glass rounded-2xl p-5">
+                <div
+                  key={p.id}
+                  className="glass hover-lift stagger-in rounded-2xl p-5"
+                  style={{ animationDelay: `${idx * 80}ms` }}
+                >
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="font-semibold text-primary">{p.address}</h3>
@@ -118,6 +123,13 @@ export default function PropertyGrowthPage() {
                       <span>Now {money(p.estimatedValue)}</span>
                     </div>
                     <GrowthBar purchase={g?.purchasePrice ?? p.purchasePrice ?? null} current={p.estimatedValue} />
+                    <CagrSparkline
+                      purchase={g?.purchasePrice ?? p.purchasePrice ?? null}
+                      current={p.estimatedValue}
+                      cagrPercent={g?.cagrPercent}
+                      yearsHeld={g?.yearsHeld}
+                      className="mt-3"
+                    />
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">

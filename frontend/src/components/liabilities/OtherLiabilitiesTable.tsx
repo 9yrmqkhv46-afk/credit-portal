@@ -60,6 +60,7 @@ export function OtherLiabilitiesTable({ readOnly = false, initialLiabilities }: 
   const [items, setItems] = useState<PersonalLiability[]>(initialLiabilities || []);
   const [loading, setLoading] = useState(!initialLiabilities);
   const [error, setError] = useState('');
+  const [pulse, setPulse] = useState<Record<string, boolean>>({});
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<EditableLiability>(EMPTY);
@@ -86,6 +87,16 @@ export function OtherLiabilitiesTable({ readOnly = false, initialLiabilities }: 
     if (readOnly) return;
     const next = !(l.includeInServicing !== false);
     setItems((prev) => prev.map((x) => (x.id === l.id ? { ...x, includeInServicing: next } : x)));
+    if (next) {
+      setPulse((prev) => ({ ...prev, [l.id]: true }));
+      window.setTimeout(() => {
+        setPulse((prev) => {
+          const cp = { ...prev };
+          delete cp[l.id];
+          return cp;
+        });
+      }, 700);
+    }
     try { await setIncludeInServicing('personalLiability', l.id, next); }
     catch {
       setItems((prev) => prev.map((x) => (x.id === l.id ? { ...x, includeInServicing: !next } : x)));
@@ -202,9 +213,22 @@ export function OtherLiabilitiesTable({ readOnly = false, initialLiabilities }: 
           <tbody>
             {items.map((l, idx) => {
               const rep = effectiveRepayment(l);
+              const excluded = l.includeInServicing === false;
+              const pulsing = !!pulse[l.id];
               return (
-                <tr key={l.id} className="row-hover border-b border-white/30 text-primary">
-                  <td className="px-3 py-2">{idx + 1}</td>
+                <tr
+                  key={l.id}
+                  className={`row-hover relative border-b border-white/30 text-primary ${excluded ? 'row-excluded' : ''} ${pulsing ? 'reinclude-pulse' : ''}`}
+                >
+                  <td className="px-3 py-2">
+                    {idx + 1}
+                    {excluded && (
+                      <>
+                        <span className="excluded-strike" aria-hidden="true" />
+                        <span className="excluded-watermark" aria-hidden="true">Excluded</span>
+                      </>
+                    )}
+                  </td>
                   <td className="px-3 py-2">{l.type.replace(/_/g, ' ')}</td>
                   <td className="px-3 py-2">{l.ownership || '—'}</td>
                   <td className="px-3 py-2">{l.ownershipPercent != null ? `${l.ownershipPercent}%` : '—'}</td>

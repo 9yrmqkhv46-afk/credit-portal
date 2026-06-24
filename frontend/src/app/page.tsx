@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Logo } from '@/components/ui/Logo';
-import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
+import { SplitFlapNumber } from '@/components/ui/SplitFlapNumber';
 
 function reducedMotion(): boolean {
   if (typeof window === 'undefined' || !window.matchMedia) return false;
@@ -201,7 +201,7 @@ export default function LandingPage() {
               className="tnum mt-1 font-display text-5xl font-bold sm:text-6xl"
               style={{ color: 'var(--accent-teal)', textShadow: '0 0 28px rgba(0,196,212,0.55)' }}
             >
-              <AnimatedNumber value={borrowing} prefix="$" durationMs={500} />
+              <SplitFlapNumber value={borrowing} prefix="$" />
             </p>
             <p className="mt-2 text-xs text-muted">Indicative estimate only. Speak to a specialist today.</p>
           </div>
