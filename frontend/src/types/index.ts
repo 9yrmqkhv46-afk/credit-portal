@@ -205,6 +205,8 @@ export interface Note {
   content: string;
   visibility: NoteVisibility;
   authorId: string;
+  tags: string | null;
+  pinned: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -434,4 +436,42 @@ export interface Household {
   clientProfileId: string;
   name: string;
   applicants?: Applicant[];
+}
+
+// === Application Status Timeline (Mandate 2) ===
+export type StageStatus = 'completed' | 'active' | 'upcoming' | 'skipped';
+
+export interface ApplicationStage {
+  id: string;
+  userId: string;
+  key: string;
+  label: string;
+  group: string;
+  orderIndex: number;
+  status: StageStatus;
+  completedAt: string | null;
+  dueDate: string | null;
+  note: string | null;
+  hasDate: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// === Messaging Hub (Mandate 4C) ===
+export type SenderRole = 'CLIENT' | 'ADMIN' | 'SYSTEM';
+export type MessageType = 'text' | 'stage_update' | 'document_request' | 'borrowing_summary' | 'meeting_request';
+export type MessageStatus = 'sent' | 'delivered' | 'read';
+
+export interface Message {
+  id: string;
+  clientUserId: string;
+  senderRole: SenderRole;
+  body: string | null;
+  type: MessageType;
+  cardData: string | null;
+  status: MessageStatus;
+  resolved: boolean;
+  flagged: boolean;
+  reactions: string | null;
+  createdAt: string;
 }

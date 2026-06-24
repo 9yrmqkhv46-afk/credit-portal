@@ -22,9 +22,9 @@ export function Button({
     'inline-flex items-center justify-center font-semibold rounded-xl transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]';
 
   const variantStyles = {
-    // Teal gradient with a soft shadow that brightens on hover.
+    // Teal gradient with near-black text (Mandate 1: never white-on-teal).
     primary:
-      'bg-gradient-to-br from-brand to-brand-dark text-white shadow-lg shadow-brand/25 hover:shadow-xl hover:brightness-110 focus:ring-brand',
+      'bg-gradient-to-br from-brand to-brand-dark text-on-accent shadow-lg shadow-brand/25 hover:shadow-xl hover:brightness-110 focus:ring-brand',
     // Frosted glass / outline.
     secondary:
       'glass-input border border-white/15 text-brand hover:bg-white/10 focus:ring-brand shadow-sm',

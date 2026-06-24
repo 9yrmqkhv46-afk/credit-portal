@@ -21,7 +21,43 @@ const profileSchema = z.object({
   privateSchoolingFlag: z.boolean().optional(),
   maritalStatus: z.enum(['SINGLE', 'MARRIED', 'DE_FACTO', 'DIVORCED', 'WIDOWED']).optional(),
   employmentStatus: z.enum(['FULL_TIME', 'PART_TIME', 'CASUAL', 'SELF_EMPLOYED', 'UNEMPLOYED', 'RETIRED']).optional(),
+
+  // --- Profile Centre extended fields (Mandate 4A). All map to NULLABLE
+  // columns -> `.nullable().optional()`, except sameAsResidential which maps to
+  // a NON-nullable Boolean (DB default) -> optional only (never nullable). ---
+  legalFirstName: z.string().nullable().optional(),
+  legalMiddleName: z.string().nullable().optional(),
+  legalLastName: z.string().nullable().optional(),
+  preferredName: z.string().nullable().optional(),
+  gender: z.string().nullable().optional(),
+  visaSubclass: z.string().nullable().optional(),
+  mobile: z.string().nullable().optional(),
+  mailingAddress: z.string().nullable().optional(),
+  sameAsResidential: z.boolean().optional(),
+  employerName: z.string().nullable().optional(),
+  jobTitle: z.string().nullable().optional(),
+  employmentStartDate: z.string().nullable().optional(),
+  annualIncome: z.number().min(0).nullable().optional(),
+  loanPurposePref: z.string().nullable().optional(),
+  preferredLoanTerm: z.number().int().min(0).nullable().optional(),
+  documentChecklist: z.string().nullable().optional(),
 });
+
+/** Convert optional date strings in a profile payload to Date objects. */
+function buildProfileData(data: z.infer<typeof profileSchema>) {
+  const { dateOfBirth, employmentStartDate, ...rest } = data;
+  const toDate = (v?: string | null): Date | null | undefined => {
+    if (v === undefined) return undefined;
+    if (v === null || v === '') return null;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  };
+  return {
+    ...rest,
+    ...(dateOfBirth !== undefined ? { dateOfBirth: toDate(dateOfBirth) ?? undefined } : {}),
+    ...(employmentStartDate !== undefined ? { employmentStartDate: toDate(employmentStartDate) } : {}),
+  };
+}
 
 // GET /api/client/profile
 router.get('/profile', async (req: AuthRequest, res: Response): Promise<void> => {
@@ -64,8 +100,7 @@ router.post('/profile', async (req: AuthRequest, res: Response): Promise<void> =
     const profile = await prisma.clientProfile.create({
       data: {
         userId: req.user!.id,
-        ...data,
-        dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
+        ...buildProfileData(data),
       },
     });
 
@@ -87,8 +122,7 @@ router.put('/profile', async (req: AuthRequest, res: Response): Promise<void> =>
     const profile = await prisma.clientProfile.update({
       where: { userId: req.user!.id },
       data: {
-        ...data,
-        dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
+        ...buildProfileData(data),
       },
     });
 

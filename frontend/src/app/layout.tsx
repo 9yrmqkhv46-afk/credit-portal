@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { SpatialBackground } from '@/components/ui/SpatialBackground';
+import { ToastProvider } from '@/components/ui/Toast';
 
 export const metadata: Metadata = {
   title: 'TransformBiz Credit Lenders Portal',
@@ -38,7 +39,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col antialiased">
         <SpatialBackground />
         <AuthProvider>
-          {children}
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>

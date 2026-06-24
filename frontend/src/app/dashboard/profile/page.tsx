@@ -21,6 +21,7 @@ import { ExistingHomeLoansTable } from '@/components/loans/ExistingHomeLoansTabl
 import { ProposedHomeLoansTable } from '@/components/loans/ProposedHomeLoansTable';
 import { OtherLiabilitiesTable } from '@/components/liabilities/OtherLiabilitiesTable';
 import { LivingExpensesForm } from '@/components/expenses/LivingExpensesForm';
+import { ProfileCentre } from '@/components/profile/ProfileCentre';
 
 /** Inline SVG section icons (no icon-font / no network). */
 const Icon = {
@@ -291,6 +292,17 @@ export default function ProfilePage() {
         <p className="mt-1 text-sm text-muted">
           Tick the items to include in the borrowing calculation as you go.
         </p>
+      </div>
+
+      {/* Profile Centre — collapsible sections (Mandate 4A) */}
+      <div className="animate-enter" style={{ animationDelay: '30ms' }}>
+        <h2 className="mb-3 font-display text-lg font-semibold text-primary">Profile Centre</h2>
+        <ProfileCentre />
+      </div>
+
+      <div className="animate-enter" style={{ animationDelay: '50ms' }}>
+        <h2 className="font-display text-lg font-semibold text-primary">Servicing Assessment</h2>
+        <p className="mt-1 text-sm text-muted">Income, properties, loans, liabilities and expenses for your borrowing calculation.</p>
       </div>
 
       {/* Step progress indicator */}

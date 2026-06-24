@@ -53,11 +53,12 @@
   --glass-4-solid: #19233a;
   --glass-5-solid: #1e2a44;
 
-  /* Text tokens (WCAG-AA tuned on the glass surfaces). */
-  --text-primary: #f4f7fb;
-  --text-secondary: #c4cdda;
-  --text-muted: #8d99ab;
-  --text-faint: #616d7e;
+  /* Text tokens (Mandate 1 — high-contrast on glass surfaces). */
+  --text-primary: rgba(240, 245, 255, 0.97);
+  --text-secondary: rgba(185, 205, 240, 0.80);
+  --text-muted: rgba(140, 165, 210, 0.62);
+  --text-faint: rgba(100, 130, 180, 0.42);
+  --text-on-accent: rgba(0, 8, 20, 0.96);
 
   /* Accents. */
   --accent-teal: #00c4d4;
@@ -125,10 +126,12 @@
   --color-danger-light: #311018;
 
   /* Text scale (generate text-primary / text-secondary / text-muted / text-faint). */
-  --color-primary: #f4f7fb;
-  --color-secondary: #c4cdda;
-  --color-muted: #8d99ab;
-  --color-faint: #616d7e;
+  --color-primary: rgba(240, 245, 255, 0.97);
+  --color-secondary: rgba(185, 205, 240, 0.80);
+  --color-muted: rgba(140, 165, 210, 0.62);
+  --color-faint: rgba(100, 130, 180, 0.42);
+  /* Near-black text for use ON teal/gold/emerald accents (Mandate 1). */
+  --color-on-accent: rgba(0, 8, 20, 0.96);
 
   --color-ink: #05070e;
 
@@ -175,6 +178,23 @@ h1, h2, h3, h4 {
   .glass-1, .glass-2, .glass-3, .glass-4, .glass-5 {
     border-style: solid;
     border-width: 1px;
+    /* Mandate 1: each glass panel owns its own stacking context so nested
+       elevations + floating labels never bleed across siblings. */
+    isolation: isolate;
+  }
+
+  /* GPU promotion helper for animated glass surfaces (timeline rail, hero,
+     message bubbles). Applied explicitly so we never create an unwanted
+     containing block for fixed-position toasts/modals. */
+  .gpu-layer { transform: translateZ(0); will-change: transform; }
+
+  /* Floating input labels sit above their panel, scale from the top-left. */
+  .floating-label {
+    position: absolute;
+    z-index: 5;
+    transform-origin: left top;
+    will-change: transform;
+    pointer-events: none;
   }
   .glass-1 { background-color: var(--glass-1-solid); border-color: var(--glass-1-border); box-shadow: var(--glass-1-shadow); }
   .glass-2 { background-color: var(--glass-2-solid); border-color: var(--glass-2-border); box-shadow: var(--glass-2-shadow); }
@@ -226,7 +246,7 @@ h1, h2, h3, h4 {
     border-color: rgba(255, 255, 255, 0.12);
     color: var(--text-primary);
   }
-  .glass-input::placeholder { color: var(--text-faint); }
+  .glass-input::placeholder { color: var(--text-muted); }
 
   @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .glass { background-color: var(--glass-3-bg); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); }
@@ -522,3 +542,58 @@ h1, h2, h3, h4 {
   to { opacity: 0; transform: translateX(40px) scale(0.96); }
 }
 @keyframes toastProgress { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+
+/* ===========================================================================
+ * Application timeline (Mandate 2) + messaging (Mandate 4C) motion
+ * ======================================================================== */
+@layer utilities {
+  /* Active stage node — double-ring pulse, 1.8s. */
+  .stage-pulse { position: relative; }
+  .stage-pulse::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 9999px;
+    border: 2px solid var(--accent-teal);
+    opacity: 0.7;
+    animation: stagePulse 1.8s var(--ease-decel) infinite;
+  }
+  .stage-glow { box-shadow: 0 0 18px -2px rgba(0, 196, 212, 0.7); }
+
+  /* Vertical connector fill (teal, animates height). */
+  .rail-fill { transition: height 0.7s var(--ease-decel); }
+
+  /* Staggered entrance for timeline rows / message bubbles. */
+  .stagger-in { animation: fadeSlideUp 0.5s var(--ease-decel) both; }
+
+  /* Message bubble entrance. */
+  .bubble-in { animation: bubbleIn 0.4s var(--ease-spring) both; }
+
+  /* Typing indicator dots. */
+  .typing-dot { animation: typingWave 1.2s ease-in-out infinite; }
+
+  /* Composer send ripple. */
+  .ripple-btn { position: relative; overflow: hidden; }
+}
+
+@keyframes stagePulse {
+  0% { transform: scale(1); opacity: 0.7; }
+  70% { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+@keyframes bubbleIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes typingWave {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+
+/* Landing-page floating feature pills bob on a sine wave (Mandate 3). */
+@keyframes pillBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}

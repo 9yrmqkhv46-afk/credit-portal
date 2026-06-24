@@ -8,22 +8,29 @@ import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import api from '@/lib/api';
-import { ClientProfile, LoanScenario } from '@/types';
+import { ClientProfile, LoanScenario, ApplicationStage } from '@/types';
 
 export default function DashboardPage() {
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [scenarios, setScenarios] = useState<LoanScenario[]>([]);
+  const [stages, setStages] = useState<ApplicationStage[]>([]);
+  const [totalStages, setTotalStages] = useState(18);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [profileRes, scenariosRes] = await Promise.all([
+        const [profileRes, scenariosRes, timelineRes] = await Promise.all([
           api.get('/client/profile').catch(() => null),
           api.get('/loan-scenarios').catch(() => null),
+          api.get('/timeline').catch(() => null),
         ]);
         if (profileRes?.data) setProfile(profileRes.data.profile || null);
         if (scenariosRes?.data) setScenarios(Array.isArray(scenariosRes.data.scenarios) ? scenariosRes.data.scenarios : []);
+        if (timelineRes?.data) {
+          setStages(timelineRes.data.stages || []);
+          setTotalStages(timelineRes.data.totalStages || 18);
+        }
       } catch {
         // ignore errors on initial load
       } finally {
@@ -40,6 +47,9 @@ export default function DashboardPage() {
   const profileComplete = profile !== null;
   const hasScenarios = scenarios.length > 0;
   const recentScenarios = scenarios.slice(0, 5);
+  const completedStages = stages.filter((s) => s.status === 'completed').length;
+  const activeStage = [...stages].sort((a, b) => a.orderIndex - b.orderIndex).find((s) => s.status === 'active');
+  const progressPct = totalStages > 0 ? Math.round((completedStages / totalStages) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -100,6 +110,30 @@ export default function DashboardPage() {
           )}
         </Card>
       </div>
+
+      {/* Application progress + messages */}
+      {stages.length > 0 && (
+        <Card title="Application Status" className="animate-enter" style={{ animationDelay: '220ms' }}>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="tnum font-display text-xl font-bold text-primary">Stage {activeStage?.orderIndex ?? completedStages} of {totalStages}</p>
+              <p className="mt-0.5 text-sm text-secondary">Current: <span className="font-medium text-primary">{activeStage?.label ?? 'Complete'}</span></p>
+            </div>
+            <p className="tnum font-display text-2xl font-bold text-brand">{progressPct}%</p>
+          </div>
+          <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div className="bar-fill h-full rounded-full" style={{ width: `${progressPct}%`, background: 'linear-gradient(90deg, var(--color-brand-dark), var(--accent-teal))', boxShadow: '0 0 14px -2px rgba(0,196,212,0.7)' }} />
+          </div>
+          <div className="mt-4 flex gap-3">
+            <Link href="/dashboard/application" className="flex-1">
+              <Button variant="secondary" size="sm" className="w-full">View Full Timeline</Button>
+            </Link>
+            <Link href="/dashboard/messages" className="flex-1">
+              <Button variant="primary" size="sm" className="w-full">Messages</Button>
+            </Link>
+          </div>
+        </Card>
+      )}
 
       {/* Recent Scenarios */}
       {recentScenarios.length > 0 && (

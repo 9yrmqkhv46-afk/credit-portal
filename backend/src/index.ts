@@ -8,6 +8,8 @@ import scenarioRoutes from './routes/scenarios';
 import adminRoutes from './routes/admin';
 import servicingRoutes from './routes/servicing';
 import valuationRoutes from './routes/valuation';
+import timelineRoutes from './routes/timeline';
+import messageRoutes from './routes/messages';
 import { ensureSeedData } from './lib/bootstrap';
 
 const app = express();
@@ -101,6 +103,8 @@ app.use('/api/client', servicingRoutes);
 app.use('/api/loan-scenarios', scenarioRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/valuation', valuationRoutes);
+app.use('/api/timeline', timelineRoutes);
+app.use('/api/messages', messageRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

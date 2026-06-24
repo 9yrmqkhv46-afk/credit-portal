@@ -15,6 +15,15 @@ const NAV: ShellNavItem[] = [
       </svg>
     ),
   },
+  {
+    href: '/admin/messages',
+    label: 'Messages',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-5 w-5">
+        <path d="M4 4h16a2 2 0 012 2v10a2 2 0 01-2 2H8l-4 4V6a2 2 0 012-2z" />
+      </svg>
+    ),
+  },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

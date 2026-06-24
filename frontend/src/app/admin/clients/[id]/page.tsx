@@ -10,11 +10,14 @@ import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Alert';
 import api from '@/lib/api';
-import { AdminClientDetail, Note, ClientStatus } from '@/types';
+import { AdminClientDetail, ClientStatus, ApplicationStage } from '@/types';
 import { AxiosError } from 'axios';
 import { PropertyPortfolioTable } from '@/components/properties/PropertyPortfolioTable';
 import { OtherLiabilitiesTable } from '@/components/liabilities/OtherLiabilitiesTable';
 import { ExistingHomeLoansTable } from '@/components/loans/ExistingHomeLoansTable';
+import { ApplicationTimeline } from '@/components/timeline/ApplicationTimeline';
+import { AdminRemarksLog } from '@/components/admin/AdminRemarksLog';
+import { useToast } from '@/components/ui/Toast';
 
 const STATUS_OPTIONS = [
   { value: 'Prospect', label: 'Prospect' },
@@ -36,9 +39,10 @@ export default function AdminClientDetailPage() {
   const [client, setClient] = useState<AdminClientDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [noteContent, setNoteContent] = useState('');
-  const [addingNote, setAddingNote] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [stages, setStages] = useState<ApplicationStage[]>([]);
+  const [totalStages, setTotalStages] = useState(18);
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchClient = async () => {
@@ -66,21 +70,23 @@ export default function AdminClientDetailPage() {
     fetchClient();
   }, [clientId]);
 
-  const handleAddNote = async () => {
-    if (!noteContent.trim()) return;
-    setAddingNote(true);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get(`/admin/clients/${clientId}/timeline`);
+        setStages(res.data.stages || []);
+        setTotalStages(res.data.totalStages || 18);
+      } catch { /* ignore */ }
+    })();
+  }, [clientId]);
+
+  const patchStage = async (stageId: string, payload: Record<string, unknown>, successMsg?: string) => {
     try {
-      const res = await api.post(`/admin/clients/${clientId}/notes`, { content: noteContent, visibility: 'ADMIN_ONLY' });
-      const note = res.data.note || res.data;
-      if (client) {
-        setClient({ ...client, notes: [note, ...client.notes] });
-      }
-      setNoteContent('');
-    } catch (err) {
-      const axiosError = err as AxiosError<{ error?: string }>;
-      setError(axiosError.response?.data?.error || 'Failed to add note.');
-    } finally {
-      setAddingNote(false);
+      const res = await api.patch(`/admin/clients/${clientId}/timeline/${stageId}`, payload);
+      setStages(res.data.stages || []);
+      if (successMsg) toast(successMsg, { accent: 'teal' });
+    } catch {
+      toast('Timeline update failed', { accent: 'crimson' });
     }
   };
 
@@ -126,6 +132,9 @@ export default function AdminClientDetailPage() {
           <p className="text-secondary">{client.email}</p>
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/admin/messages">
+            <Button variant="secondary" size="sm">Open Messages</Button>
+          </Link>
           <Badge variant={getStatusVariant(profile?.status || 'Prospect')}>
             {profile?.status || 'Prospect'}
           </Badge>
@@ -255,40 +264,27 @@ export default function AdminClientDetailPage() {
         )}
       </Card>
 
-      {/* Admin Notes */}
-      <Card title="Admin Notes">
-        <div className="space-y-4">
-          {/* Add Note Form */}
-          <div className="flex gap-2">
-            <textarea
-              className="glass-input flex-1 rounded-xl border border-white/15 px-3 py-2 text-sm text-primary shadow-sm focus:border-brand focus:ring-2 focus:ring-brand/30 focus:outline-none resize-none"
-              rows={2}
-              placeholder="Add a note..."
-              value={noteContent}
-              onChange={(e) => setNoteContent(e.target.value)}
-            />
-            <Button onClick={handleAddNote} loading={addingNote} disabled={!noteContent.trim()}>
-              Add
-            </Button>
-          </div>
+      {/* Application Status Timeline (Mandate 2) */}
+      <Card title="Application Status Timeline">
+        {stages.length > 0 ? (
+          <ApplicationTimeline
+            stages={stages}
+            totalStages={totalStages}
+            admin
+            onComplete={(id) => patchStage(id, { action: 'complete' }, 'Stage marked complete')}
+            onSkip={(id) => patchStage(id, { action: 'skip' }, 'Stage skipped')}
+            onReset={(id) => patchStage(id, { action: 'reset' }, 'Stage reset')}
+            onSaveNote={(id, note) => patchStage(id, { note }, 'Note saved')}
+            onSaveDueDate={(id, dueDate) => patchStage(id, { dueDate }, 'Date saved')}
+          />
+        ) : (
+          <Spinner size="md" className="py-8" />
+        )}
+      </Card>
 
-          {/* Notes List */}
-          {client.notes.length > 0 ? (
-            <div className="space-y-3 border-t border-white/10 pt-4">
-              {client.notes.map((note: Note) => (
-                <div key={note.id} className="bg-white/5 rounded-xl p-3">
-                  <p className="text-sm text-primary">{note.content}</p>
-                  <div className="mt-1 flex gap-3 text-xs text-muted">
-                    <span>{new Date(note.createdAt).toLocaleString()}</span>
-                    <Badge variant="neutral">{note.visibility}</Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted text-sm border-t border-white/10 pt-4">No notes yet.</p>
-          )}
-        </div>
+      {/* Admin Remarks Log (Mandate 4B) */}
+      <Card title="Admin Remarks Log">
+        <AdminRemarksLog clientId={clientId} initialNotes={client.notes} />
       </Card>
     </div>
   );

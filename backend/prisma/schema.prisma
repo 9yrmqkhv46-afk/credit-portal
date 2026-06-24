@@ -31,6 +31,8 @@ model User {
   clientProfile ClientProfile?
   loanScenarios LoanScenario[]
   notes         Note[]
+  applicationStages ApplicationStage[]
+  messages          Message[]
 }
 
 // ResidencyStatus: CITIZEN | PERMANENT_RESIDENT | TEMPORARY_VISA
@@ -50,6 +52,27 @@ model ClientProfile {
   maritalStatus            String   @default("SINGLE")
   employmentStatus         String   @default("FULL_TIME")
   status                   String   @default("Prospect")
+
+  // --- Profile Centre extended fields (Mandate 4A). All nullable (optional)
+  // except sameAsResidential which is a non-nullable Boolean with a default.
+  // Zod: nullable columns -> .nullable().optional(); sameAsResidential -> optional only. ---
+  legalFirstName      String?
+  legalMiddleName     String?
+  legalLastName       String?
+  preferredName       String?
+  gender              String?
+  visaSubclass        String?
+  mobile              String?
+  mailingAddress      String?
+  sameAsResidential   Boolean  @default(false)
+  employerName        String?
+  jobTitle            String?
+  employmentStartDate DateTime?
+  annualIncome        Float?
+  loanPurposePref     String?
+  preferredLoanTerm   Int?
+  documentChecklist   String?
+
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
@@ -232,6 +255,10 @@ model Note {
   authorId         String
   linkedEntityType String?
   linkedEntityId   String?
+  // --- Admin Remarks Log (Mandate 4B). tags = comma-separated tag keys
+  // (nullable -> Zod .nullable().optional()); pinned = non-nullable Boolean. ---
+  tags             String?
+  pinned           Boolean  @default(false)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -423,4 +450,49 @@ model LivingExpenses {
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+
+// ===========================================================================
+// Loan Application Status Timeline (Mandate 2)
+// ===========================================================================
+// status: completed | active | upcoming | skipped
+// One row per stage per client (18 stages seeded idempotently on first request).
+model ApplicationStage {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  key         String
+  label       String
+  group       String
+  orderIndex  Int
+  status      String    @default("upcoming")
+  completedAt DateTime?
+  dueDate     DateTime?
+  note        String?
+  hasDate     Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ===========================================================================
+// Messaging Hub (Mandate 4C)
+// ===========================================================================
+// senderRole: CLIENT | ADMIN | SYSTEM
+// type: text | stage_update | document_request | borrowing_summary | meeting_request
+// status: sent | delivered | read
+// cardData / reactions: JSON-encoded strings (nullable)
+model Message {
+  id           String   @id @default(uuid())
+  clientUserId String
+  clientUser   User     @relation(fields: [clientUserId], references: [id])
+  senderRole   String
+  body         String?
+  type         String   @default("text")
+  cardData     String?
+  status       String   @default("sent")
+  resolved     Boolean  @default(false)
+  flagged      Boolean  @default(false)
+  reactions    String?
+  createdAt    DateTime @default(now())
 }
