@@ -13,13 +13,19 @@ interface Props {
   stageLabel?: string;
   stageHref?: string;
   admin?: boolean;
+  /** True while a background refetch (live polling) is in flight. */
+  live?: boolean;
   onSend: (payload: { body?: string; type: MessageType; cardData?: unknown }) => void;
-  onReact?: (messageId: string, emoji: string) => void;
+  /** Receives the FULL new reactions array (toggled), not a single emoji. */
+  onReact?: (messageId: string, reactions: string[]) => void;
   onResolve?: (messageId: string, resolved: boolean) => void;
   onFlag?: (messageId: string, flagged: boolean) => void;
 }
 
 const REACTIONS = ['👍', '✅', '❓', '🏠', '📋'];
+
+/** Max attachment size — base64 inflates by ~33%, keep under the 12mb API limit. */
+const MAX_ATTACHMENT_BYTES = 7 * 1024 * 1024;
 
 function dayLabel(date: Date): string {
   const today = new Date();
@@ -47,14 +53,17 @@ function Ticks({ status }: { status: Message['status'] }) {
 
 export function MessageThread({
   messages, viewerRole, headerTitle, headerSubtitle, stageLabel, stageHref,
-  admin = false, onSend, onReact, onResolve, onFlag,
+  admin = false, live = false, onSend, onReact, onResolve, onFlag,
 }: Props) {
   const [draft, setDraft] = useState('');
   const [showAttach, setShowAttach] = useState(false);
   const [reactingId, setReactingId] = useState<string | null>(null);
   const [typing, setTyping] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const ordered = useMemo(
     () => [...messages].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
@@ -65,6 +74,13 @@ export function MessageThread({
     const el = feedRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [ordered.length, typing]);
+
+  // Auto-dismiss the transient inline note (used by header call/profile buttons).
+  useEffect(() => {
+    if (!note) return;
+    const t = window.setTimeout(() => setNote(null), 2600);
+    return () => window.clearTimeout(t);
+  }, [note]);
 
   const autosize = () => {
     const ta = taRef.current;
@@ -100,6 +116,61 @@ export function MessageThread({
     send({ body: s.body, type, cardData: s.cardData });
   };
 
+  /** Open the OS file picker for a real attachment upload. */
+  const pickFile = () => {
+    setShowAttach(false);
+    fileRef.current?.click();
+  };
+
+  /** Read the chosen file as a base64 data URL and send it as an attachment. */
+  const onFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset so picking the same file again re-fires change.
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setNote(`"${file.name}" is too large (max 7 MB).`);
+      return;
+    }
+    setUploading(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      send({
+        type: 'attachment',
+        body: file.name,
+        cardData: { fileName: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, dataUrl },
+      });
+    } catch {
+      setNote('Could not read that file. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  /** Toggle a reaction on a message and emit the FULL resulting array. */
+  const toggleReaction = (m: Message, emoji: string) => {
+    let current: string[] = [];
+    try { current = m.reactions ? JSON.parse(m.reactions) : []; } catch { current = []; }
+    const next = current.includes(emoji) ? current.filter((r) => r !== emoji) : [...current, emoji];
+    onReact?.(m.id, next);
+    setReactingId(null);
+  };
+
+  const headerAction = (kind: string) => {
+    if (kind === 'profile' && admin && stageHref) { window.location.href = stageHref; return; }
+    const labels: Record<string, string> = {
+      phone: `Calling ${headerTitle}…`,
+      video: `Starting video call with ${headerTitle}…`,
+      profile: 'Opening profile…',
+    };
+    setNote(labels[kind] ?? null);
+  };
+
   const lastIncoming = ordered.length > 0 && ordered[ordered.length - 1].senderRole !== viewerRole && ordered[ordered.length - 1].senderRole !== 'SYSTEM';
   const quickReplies = viewerRole === 'CLIENT'
     ? ['Thanks!', 'Got it 👍', 'When is settlement?']
@@ -119,7 +190,7 @@ export function MessageThread({
           <div>
             <p className="flex items-center gap-2 text-sm font-semibold text-primary">
               {headerTitle}
-              <span className="inline-flex h-2 w-2 rounded-full bg-emerald shadow-[0_0_8px_var(--accent-emerald)]" aria-label="online" />
+              <span className={`inline-flex h-2 w-2 rounded-full bg-emerald shadow-[0_0_8px_var(--accent-emerald)] ${live ? 'animate-ping-slow' : ''}`} aria-label="online" />
             </p>
             {headerSubtitle && <p className="text-xs text-muted">{headerSubtitle}</p>}
           </div>
@@ -131,7 +202,7 @@ export function MessageThread({
             </a>
           )}
           {['phone', 'video', 'profile'].map((k) => (
-            <button key={k} type="button" aria-label={k} className="rounded-lg p-1.5 text-muted ring-1 ring-white/12 hover:bg-white/10 hover:text-primary">
+            <button key={k} type="button" aria-label={k} onClick={() => headerAction(k)} className="rounded-lg p-1.5 text-muted ring-1 ring-white/12 hover:bg-white/10 hover:text-primary">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 {k === 'phone' && <path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3 19.5 19.5 0 01-6-6 19.8 19.8 0 01-3-8.6A2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.3 1.8.6 2.6a2 2 0 01-.5 2.1L8 9.6a16 16 0 006 6l1.2-1.2a2 2 0 012.1-.5c.8.3 1.7.5 2.6.6a2 2 0 011.7 2z" strokeLinecap="round" strokeLinejoin="round" />}
                 {k === 'video' && <path d="M23 7l-7 5 7 5V7zM1 5h13a2 2 0 012 2v10a2 2 0 01-2 2H1z" strokeLinecap="round" strokeLinejoin="round" />}
@@ -141,6 +212,13 @@ export function MessageThread({
           ))}
         </div>
       </div>
+
+      {/* Transient inline note (call/profile actions, upload errors) */}
+      {note && (
+        <div className="bubble-in border-b border-white/10 bg-brand-light/60 px-4 py-2 text-center text-xs font-medium text-brand">
+          {note}
+        </div>
+      )}
 
       {/* Feed */}
       <div ref={feedRef} className="flex-1 space-y-1 overflow-y-auto px-4 py-4">
@@ -185,7 +263,14 @@ export function MessageThread({
                           : 'glass-2 rounded-[18px_18px_18px_4px] text-primary',
                       ].join(' ')}
                     >
-                      {m.type !== 'text' ? <MessageCard message={m} /> : <p className="whitespace-pre-wrap break-words">{m.body}</p>}
+                      {m.type !== 'text'
+                        ? <MessageCard
+                            message={m}
+                            onUpload={pickFile}
+                            onMeetingAccept={() => send({ body: 'Sounds good — that time works for me. ✅', type: 'text' })}
+                            onMeetingReschedule={() => { setDraft('Could we find another time? I was thinking…'); taRef.current?.focus(); }}
+                          />
+                        : <p className="whitespace-pre-wrap break-words">{m.body}</p>}
                       <div className="mt-1 flex items-center justify-end gap-1">
                         <span className="tnum text-[10px] text-muted opacity-0 transition-opacity group-hover:opacity-100">
                           {created.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
@@ -195,10 +280,29 @@ export function MessageThread({
                       </div>
                     </div>
 
+                    {/* Reaction button (always available on hover) */}
+                    <button
+                      type="button"
+                      aria-label="React"
+                      onClick={() => setReactingId(reactingId === m.id ? null : m.id)}
+                      className={`absolute top-1 ${isOutgoing ? '-left-7' : '-right-7'} rounded-full bg-white/8 p-1 text-muted opacity-0 ring-1 ring-white/12 transition-opacity hover:text-primary group-hover:opacity-100`}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" /><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" strokeLinecap="round" />
+                      </svg>
+                    </button>
+
                     {reactions.length > 0 && (
                       <div className={`mt-0.5 flex gap-1 ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
                         {reactions.map((r, i) => (
-                          <span key={i} className="rounded-full bg-white/10 px-1.5 text-xs ring-1 ring-white/15">{r}</span>
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => toggleReaction(m, r)}
+                            className="rounded-full bg-white/10 px-1.5 text-xs ring-1 ring-white/15 transition hover:bg-white/20"
+                          >
+                            {r}
+                          </button>
                         ))}
                       </div>
                     )}
@@ -218,7 +322,7 @@ export function MessageThread({
                     {reactingId === m.id && (
                       <div className={`absolute z-20 mt-1 flex gap-1 rounded-full glass-4 px-2 py-1 ${isOutgoing ? 'right-0' : 'left-0'}`}>
                         {REACTIONS.map((r) => (
-                          <button key={r} type="button" onClick={() => { onReact?.(m.id, r); setReactingId(null); }} className="text-base hover:scale-125 transition-transform">
+                          <button key={r} type="button" onClick={() => toggleReaction(m, r)} className="text-base hover:scale-125 transition-transform">
                             {r}
                           </button>
                         ))}
@@ -257,11 +361,18 @@ export function MessageThread({
       <div className="glass-3 relative border-t border-white/10 p-3">
         {showAttach && (
           <div className="absolute bottom-16 left-3 z-20 w-56 rounded-xl glass-4 p-2">
+            <button type="button" onClick={pickFile} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-secondary hover:bg-white/10 hover:text-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+              </svg>
+              Upload file / photo
+            </button>
+            <div className="my-1 border-t border-white/10" />
             {([
-              ['document_request', 'Document'],
-              ['borrowing_summary', 'Property Report'],
-              ['borrowing_summary', 'Borrowing Summary'],
-              ['meeting_request', 'Meeting Request'],
+              ['document_request', 'Document request'],
+              ['borrowing_summary', 'Borrowing summary'],
+              ['meeting_request', 'Meeting request'],
+              ['stage_update', 'Status update'],
             ] as [MessageType, string][]).map(([type, label], i) => (
               <button key={i} type="button" onClick={() => attach(type)} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-secondary hover:bg-white/10 hover:text-primary">
                 {label}
@@ -269,16 +380,28 @@ export function MessageThread({
             ))}
           </div>
         )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+          className="hidden"
+          onChange={onFileChosen}
+        />
         <div className="flex items-end gap-2">
           <button
             type="button"
             aria-label="Attach"
             onClick={() => setShowAttach((s) => !s)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-secondary ring-1 ring-white/15 hover:bg-white/10 hover:text-primary"
+            disabled={uploading}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-secondary ring-1 ring-white/15 hover:bg-white/10 hover:text-primary disabled:opacity-50"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M21 12.8l-8.5 8.5a5 5 0 01-7-7l8.5-8.5a3.3 3.3 0 014.7 4.7L10 18a1.6 1.6 0 01-2.3-2.3l7.8-7.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            {uploading ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-brand" />
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M21 12.8l-8.5 8.5a5 5 0 01-7-7l8.5-8.5a3.3 3.3 0 014.7 4.7L10 18a1.6 1.6 0 01-2.3-2.3l7.8-7.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
           </button>
           <textarea
             ref={taRef}

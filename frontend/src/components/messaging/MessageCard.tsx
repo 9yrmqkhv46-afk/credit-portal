@@ -3,6 +3,15 @@
 import React from 'react';
 import { Message } from '@/types';
 
+interface MessageCardProps {
+  message: Message;
+  /** Document-request "Upload documents" action. */
+  onUpload?: () => void;
+  /** Meeting-request actions. */
+  onMeetingAccept?: () => void;
+  onMeetingReschedule?: () => void;
+}
+
 /** Parse the JSON cardData string safely. */
 function parseCard(message: Message): Record<string, unknown> | null {
   if (!message.cardData) return null;
@@ -19,14 +28,66 @@ function money(n: unknown): string {
   return `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
+function fileSize(bytes: unknown): string {
+  const b = typeof bytes === 'number' ? bytes : Number(bytes);
+  if (Number.isNaN(b) || b <= 0) return '';
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 /**
  * Renders the structured CARD message types (stage_update, document_request,
- * borrowing_summary, meeting_request) with their action affordances.
+ * borrowing_summary, meeting_request, attachment) with their action affordances.
  * Returns null for plain text messages.
  */
-export function MessageCard({ message }: { message: Message }) {
+export function MessageCard({ message, onUpload, onMeetingAccept, onMeetingReschedule }: MessageCardProps) {
   if (message.type === 'text') return null;
   const card = parseCard(message);
+
+  if (message.type === 'attachment') {
+    const fileName = String(card?.fileName ?? 'attachment');
+    const mimeType = String(card?.mimeType ?? '');
+    const dataUrl = typeof card?.dataUrl === 'string' ? (card.dataUrl as string) : '';
+    const isImage = mimeType.startsWith('image/');
+    const sizeLabel = fileSize(card?.size);
+
+    if (isImage && dataUrl) {
+      return (
+        <div className="overflow-hidden rounded-xl">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <a href={dataUrl} download={fileName} target="_blank" rel="noopener noreferrer">
+            <img src={dataUrl} alt={fileName} className="max-h-64 w-full max-w-xs rounded-xl object-cover" />
+          </a>
+          <div className="mt-1 flex items-center justify-between gap-2 text-xs text-secondary">
+            <span className="truncate">{fileName}</span>
+            {sizeLabel && <span className="tnum shrink-0 text-muted">{sizeLabel}</span>}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <a
+        href={dataUrl || undefined}
+        download={fileName}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-3 rounded-xl border border-white/12 bg-white/6 p-2.5 transition hover:bg-white/10"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/20 text-brand">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M14 2v6h6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-primary">{fileName}</span>
+          <span className="block text-xs text-muted">{sizeLabel ? `${sizeLabel} · ` : ''}Tap to download</span>
+        </span>
+      </a>
+    );
+  }
 
   if (message.type === 'stage_update') {
     return (
@@ -54,7 +115,12 @@ export function MessageCard({ message }: { message: Message }) {
             </li>
           ))}
         </ul>
-        <button type="button" className="mt-2 rounded-lg px-2.5 py-1 text-xs font-semibold text-gold ring-1 ring-gold/40 hover:bg-gold-light">
+        <button
+          type="button"
+          onClick={onUpload}
+          className="mt-2 rounded-lg px-2.5 py-1 text-xs font-semibold text-gold ring-1 ring-gold/40 hover:bg-gold-light disabled:opacity-50"
+          disabled={!onUpload}
+        >
           Upload documents
         </button>
       </div>
@@ -84,8 +150,22 @@ export function MessageCard({ message }: { message: Message }) {
           {String(card?.proposed ?? 'TBC')}{card?.durationMins != null ? ` · ${String(card.durationMins)} min` : ''}
         </p>
         <div className="mt-2 flex gap-2">
-          <button type="button" className="rounded-lg px-2.5 py-1 text-xs font-semibold text-on-accent bg-sapphire/90 hover:brightness-110">Accept</button>
-          <button type="button" className="rounded-lg px-2.5 py-1 text-xs font-semibold text-secondary ring-1 ring-white/20 hover:bg-white/10">Reschedule</button>
+          <button
+            type="button"
+            onClick={onMeetingAccept}
+            disabled={!onMeetingAccept}
+            className="rounded-lg px-2.5 py-1 text-xs font-semibold text-on-accent bg-sapphire/90 hover:brightness-110 disabled:opacity-50"
+          >
+            Accept
+          </button>
+          <button
+            type="button"
+            onClick={onMeetingReschedule}
+            disabled={!onMeetingReschedule}
+            className="rounded-lg px-2.5 py-1 text-xs font-semibold text-secondary ring-1 ring-white/20 hover:bg-white/10 disabled:opacity-50"
+          >
+            Reschedule
+          </button>
         </div>
       </div>
     );
