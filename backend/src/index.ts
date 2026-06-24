@@ -6,6 +6,7 @@ import authRoutes from './routes/auth';
 import clientRoutes from './routes/client';
 import scenarioRoutes from './routes/scenarios';
 import adminRoutes from './routes/admin';
+import servicingRoutes from './routes/servicing';
 import { ensureSeedData } from './lib/bootstrap';
 
 const app = express();
@@ -95,6 +96,7 @@ app.use('/api/auth/register', rateLimiter);
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/client', clientRoutes);
+app.use('/api/client', servicingRoutes);
 app.use('/api/loan-scenarios', scenarioRoutes);
 app.use('/api/admin', adminRoutes);
 

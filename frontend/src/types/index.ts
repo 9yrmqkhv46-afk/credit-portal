@@ -79,8 +79,48 @@ export interface Property {
   mortgageBalance: number | null;
   rentalIncome: number | null;
   description: string | null;
+  // Extended Quickli-style fields
+  postcode?: string | null;
+  purchasePrice?: number | null;
+  purchaseDate?: string | null;
+  transactionType?: 'OWNS_WITH_MORTGAGE' | 'OWNS_OUTRIGHT' | 'PURCHASING' | null;
+  holidayFlag?: boolean;
+  eligibleNegativeGearing?: boolean;
+  rentalIncomeAmount?: number | null;
+  rentalIncomeFrequency?: Frequency | null;
+  investmentExpenseAmount?: number | null;
+  investmentExpenseFrequency?: Frequency | null;
+  valuationSource?: string | null;
+  valuationDate?: string | null;
+  ownership?: string | null;
+  includeInServicing?: boolean;
+  growth?: PropertyGrowth;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PropertyGrowth {
+  currentValue: number;
+  purchasePrice: number | null;
+  capitalGrowthDollars: number | null;
+  capitalGrowthPercent: number | null;
+  yearsHeld: number | null;
+  cagrPercent: number | null;
+  weeklyRent: number | null;
+  totalGrossRent: number | null;
+  grossYieldPercent: number | null;
+}
+
+export interface PortfolioGrowth {
+  totalValue: number;
+  totalDebt: number;
+  totalEquity: number;
+  totalPurchase: number;
+  totalCapitalGrowthDollars: number | null;
+  totalCapitalGrowthPercent: number | null;
+  blendedGrossYieldPercent: number | null;
+  propertyCount: number;
+  disclaimer: string;
 }
 
 export interface ExpenseSummary {
@@ -234,4 +274,140 @@ export interface ClientProfileInput {
   privateSchoolingFlag: boolean;
   maritalStatus: MaritalStatus;
   employmentStatus: EmploymentStatus;
+}
+
+
+// === Extended Quickli-style servicing entities ===
+
+export type IncomeCategory =
+  | 'BASE_SALARY_PAYG' | 'SECOND_PAYG' | 'CASUAL' | 'COMMISSION' | 'OVERTIME'
+  | 'ESSENTIAL_OVERTIME' | 'ALLOWANCES' | 'BONUS_RECENT' | 'BONUS_PREVIOUS'
+  | 'FOREIGN_PAYG' | 'NET_FOREIGN' | 'INVESTMENT' | 'INTEREST' | 'SUPER_ANNUITY'
+  | 'CARERS' | 'GOVERNMENT_PENSION' | 'COMPANY_CAR' | 'CHILD_MAINTENANCE'
+  | 'OTHER_TAXED' | 'OTHER_TAX_FREE' | 'FAMILY_TAX_A' | 'FAMILY_TAX_B'
+  | 'PARENTING_PAYMENT';
+
+export type EmploymentType = 'FULL_TIME_PERMANENT' | 'PART_TIME' | 'CASUAL' | 'CONTRACT';
+
+export interface IncomeEntry {
+  id: string;
+  clientProfileId: string;
+  applicantId: string | null;
+  category: IncomeCategory;
+  amount: number;
+  frequency: Frequency;
+  shadingOverride: number | null;
+  jobNumber: number | null;
+  employer: string | null;
+  employmentType: EmploymentType | null;
+  industry: string | null;
+  startDate: string | null;
+  payDate: string | null;
+  payslipEndDate: string | null;
+  payFrequency: string | null;
+  baseSalaryPerPeriod: number | null;
+  grossYtd: number | null;
+  lessBonus: number | null;
+  nonBaseToAllocate: number | null;
+  nonBaseToOmit: number | null;
+  useDetailedYtd: boolean;
+  useSecondPayslip: boolean;
+  hecsFlag: boolean;
+  hecsAmount: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProposedHomeLoan {
+  id: string;
+  clientProfileId: string;
+  productType: string | null;
+  investmentFlag: boolean;
+  loanAmount: number;
+  termYears: number;
+  ioTermYears: number;
+  interestRate: number | null;
+  lvr: number | null;
+  overrideRate: boolean;
+  securityLinks: number;
+  ownership: string | null;
+  includeInServicing: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExistingHomeLoan {
+  id: string;
+  clientProfileId: string;
+  locFlag: boolean;
+  investmentFlag: boolean;
+  loanAmount: number;
+  interestRate: number;
+  termYears: number;
+  ioTermYears: number;
+  monthlyRepayment: number | null;
+  lender: string | null;
+  securityLinks: number;
+  ownership: string | null;
+  includeInServicing: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PersonalLiabilityType = 'CREDIT_CARD' | 'CAR_LOAN' | 'PERSONAL_LOAN' | 'HECS' | 'OTHER';
+
+export interface PersonalLiability {
+  id: string;
+  clientProfileId: string;
+  type: PersonalLiabilityType;
+  limit: number | null;
+  interestRate: number | null;
+  remainingTermYears: number | null;
+  repaymentAmount: number | null;
+  includeInServicing: boolean;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LivingExpenses {
+  id: string;
+  clientProfileId: string;
+  basicExpenseAmount: number;
+  basicExpenseFrequency: Frequency;
+  propertyTax: number | null;
+  strataBodyCorp: number | null;
+  privateSchoolFees: number | null;
+  childSupportMaintenance: number | null;
+  privateHealthInsurance: number | null;
+  lifeInsurance: number | null;
+  secondaryResidenceCosts: number | null;
+  otherNonHem: number | null;
+  useNotionalRent: boolean;
+  rentBoardAmount: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Dependant {
+  id: string;
+  applicantId: string;
+  age: number;
+}
+
+export interface Applicant {
+  id: string;
+  householdId: string;
+  name: string;
+  relationship: string | null;
+  postcode: string | null;
+  dependantsCount: number;
+  dependants?: Dependant[];
+}
+
+export interface Household {
+  id: string;
+  clientProfileId: string;
+  name: string;
+  applicants?: Applicant[];
 }

@@ -137,6 +137,131 @@ h1, h2, h3, h4 {
   @media (prefers-reduced-motion: reduce) {
     * {
       transition-duration: 0.001ms !important;
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+    }
+    .auth-glyph,
+    .auth-blob,
+    .auth-card,
+    .btn-shimmer::after {
+      animation: none !important;
     }
   }
+}
+
+/* ===========================================================================
+ * Animated auth scene (login / admin-login)
+ * ---------------------------------------------------------------------------
+ * Pure CSS keyframes (no JS animation libs). All motion is disabled under
+ * prefers-reduced-motion via the block above.
+ * ======================================================================== */
+@layer utilities {
+  /* Deep navy backdrop for the auth scene. */
+  .auth-scene {
+    background:
+      radial-gradient(900px 600px at 15% 10%, rgba(1, 105, 111, 0.30), transparent 60%),
+      radial-gradient(800px 600px at 85% 20%, rgba(209, 153, 0, 0.18), transparent 55%),
+      radial-gradient(900px 700px at 50% 110%, rgba(1, 105, 111, 0.22), transparent 60%),
+      #0a0f1e;
+  }
+
+  /* Faint blueprint grid overlay. */
+  .auth-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(circle at 50% 40%, black 0%, transparent 80%);
+    -webkit-mask-image: radial-gradient(circle at 50% 40%, black 0%, transparent 80%);
+  }
+
+  /* Slowly drifting finance glyphs. */
+  .auth-glyph {
+    position: absolute;
+    color: rgba(255, 255, 255, 0.10);
+    font-weight: 700;
+    user-select: none;
+    pointer-events: none;
+    animation: authDrift 22s ease-in-out infinite;
+  }
+
+  /* Soft pulsing radial blobs. */
+  .auth-blob {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(80px);
+    opacity: 0.5;
+    pointer-events: none;
+    animation: authPulse 9s ease-in-out infinite;
+  }
+
+  /* Frosted card entrance: fade + slide + scale. */
+  .auth-card {
+    animation: authCardIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Shimmer sweep on the primary button. */
+  .btn-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -150%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+      120deg,
+      transparent,
+      rgba(255, 255, 255, 0.35),
+      transparent
+    );
+    animation: authShimmer 2.8s ease-in-out infinite;
+  }
+
+  /* Horizontal wiggle for invalid submit. */
+  .auth-wiggle {
+    animation: authWiggle 0.4s ease-in-out;
+  }
+
+  /* Success lift + fade before route change. */
+  .auth-success {
+    animation: authSuccess 0.5s ease forwards;
+  }
+}
+
+@keyframes authDrift {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  50%  { transform: translateY(-22px) rotate(8deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes authPulse {
+  0%, 100% { transform: scale(1);   opacity: 0.40; }
+  50%      { transform: scale(1.15); opacity: 0.60; }
+}
+
+@keyframes authCardIn {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes authShimmer {
+  0%   { left: -150%; }
+  60%  { left: 150%; }
+  100% { left: 150%; }
+}
+
+@keyframes authWiggle {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-8px); }
+  40%      { transform: translateX(8px); }
+  60%      { transform: translateX(-5px); }
+  80%      { transform: translateX(5px); }
+}
+
+@keyframes authSuccess {
+  to { opacity: 0; transform: translateY(-16px) scale(0.98); }
 }

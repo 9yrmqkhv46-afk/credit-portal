@@ -49,6 +49,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <Link href="/dashboard/calculator" className="text-sm font-medium text-slate-700 hover:text-brand transition-colors">
                   Calculator
                 </Link>
+                <Link href="/dashboard/properties/growth" className="text-sm font-medium text-slate-700 hover:text-brand transition-colors">
+                  Property Growth
+                </Link>
               </div>
             </div>
             <div className="flex items-center gap-4">

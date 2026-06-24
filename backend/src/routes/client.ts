@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { computePropertyGrowth } from '../services/servicing';
 
 const router = Router();
 
@@ -366,16 +367,49 @@ router.delete('/existing-debts/:id', async (req: AuthRequest, res: Response): Pr
 
 // === Properties ===
 
+// Optional numeric/string fields are nullable: the profile wizard sends `null`
+// for blank inputs, and Prisma stores null in these nullable columns. Required
+// columns (type, address, estimatedValue) stay required. Boolean columns have a
+// DB default so they are optional (NOT nullable — the column is non-nullable).
 const propertySchema = z.object({
   type: z.enum(['OWNER_OCCUPIED', 'INVESTMENT', 'RENTAL']),
   address: z.string().min(1, 'Address is required'),
   estimatedValue: z.number().positive('Estimated value must be greater than 0'),
-  // Optional numeric fields are nullable: the profile wizard sends `null` for
-  // blank inputs, and Prisma stores null in these nullable columns.
   mortgageBalance: z.number().min(0).nullable().optional(),
   rentalIncome: z.number().min(0).nullable().optional(),
   description: z.string().nullable().optional(),
+
+  // --- Extended Quickli-style fields ---
+  postcode: z.string().nullable().optional(),
+  purchasePrice: z.number().min(0).nullable().optional(),
+  purchaseDate: z.string().nullable().optional(),
+  transactionType: z.enum(['OWNS_WITH_MORTGAGE', 'OWNS_OUTRIGHT', 'PURCHASING']).nullable().optional(),
+  holidayFlag: z.boolean().optional(),
+  eligibleNegativeGearing: z.boolean().optional(),
+  rentalIncomeAmount: z.number().min(0).nullable().optional(),
+  rentalIncomeFrequency: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).nullable().optional(),
+  investmentExpenseAmount: z.number().min(0).nullable().optional(),
+  investmentExpenseFrequency: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).nullable().optional(),
+  valuationSource: z.string().nullable().optional(),
+  valuationDate: z.string().nullable().optional(),
+  ownership: z.string().nullable().optional(),
+  includeInServicing: z.boolean().optional(),
 });
+
+/** Convert the optional date strings in a property payload to Date objects. */
+function buildPropertyData(data: z.infer<typeof propertySchema>) {
+  const { purchaseDate, valuationDate, ...rest } = data;
+  const toDate = (v?: string | null): Date | undefined => {
+    if (v === undefined || v === null || v === '') return undefined;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  };
+  return {
+    ...rest,
+    ...(purchaseDate !== undefined ? { purchaseDate: toDate(purchaseDate) } : {}),
+    ...(valuationDate !== undefined ? { valuationDate: toDate(valuationDate) } : {}),
+  };
+}
 
 // GET /api/client/properties
 router.get('/properties', async (req: AuthRequest, res: Response): Promise<void> => {
@@ -393,7 +427,10 @@ router.get('/properties', async (req: AuthRequest, res: Response): Promise<void>
       where: { clientProfileId: profile.id },
     });
 
-    res.json({ properties });
+    // Attach backend-computed growth/ROI so the frontend never recomputes.
+    const withGrowth = properties.map((p: any) => ({ ...p, growth: computePropertyGrowth(p) }));
+
+    res.json({ properties: withGrowth });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error.' });
   }
@@ -416,11 +453,11 @@ router.post('/properties', async (req: AuthRequest, res: Response): Promise<void
     const property = await prisma.property.create({
       data: {
         clientProfileId: profile.id,
-        ...data,
+        ...buildPropertyData(data),
       },
     });
 
-    res.status(201).json({ property });
+    res.status(201).json({ property: { ...property, growth: computePropertyGrowth(property as any) } });
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
@@ -455,10 +492,10 @@ router.put('/properties/:id', async (req: AuthRequest, res: Response): Promise<v
 
     const property = await prisma.property.update({
       where: { id: req.params.id },
-      data,
+      data: buildPropertyData(data),
     });
 
-    res.json({ property });
+    res.json({ property: { ...property, growth: computePropertyGrowth(property as any) } });
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
@@ -498,22 +535,25 @@ router.delete('/properties/:id', async (req: AuthRequest, res: Response): Promis
 
 // === Expense Summary ===
 
+// Expense numeric fields map to NON-nullable Float columns (e.g. `groceries
+// Float @default(0)`) in both schema.prisma and schema.postgres.prisma, so they
+// must NOT be nullable. They are optional only (blank => undefined => DB default).
 const expenseSchema = z.object({
-  groceries: z.number().min(0).nullable().optional(),
+  groceries: z.number().min(0).optional(),
   groceriesFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  utilities: z.number().min(0).nullable().optional(),
+  utilities: z.number().min(0).optional(),
   utilitiesFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  transport: z.number().min(0).nullable().optional(),
+  transport: z.number().min(0).optional(),
   transportFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  insurance: z.number().min(0).nullable().optional(),
+  insurance: z.number().min(0).optional(),
   insuranceFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  education: z.number().min(0).nullable().optional(),
+  education: z.number().min(0).optional(),
   educationFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  childcare: z.number().min(0).nullable().optional(),
+  childcare: z.number().min(0).optional(),
   childcareFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  entertainment: z.number().min(0).nullable().optional(),
+  entertainment: z.number().min(0).optional(),
   entertainmentFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
-  otherExpenses: z.number().min(0).nullable().optional(),
+  otherExpenses: z.number().min(0).optional(),
   otherExpensesFreq: z.enum(['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL']).optional(),
 });
 

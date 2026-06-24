@@ -145,14 +145,38 @@ export async function ensureSeedData(): Promise<void> {
       where: { clientProfileId: profile.id },
     });
     if (propertyCount === 0) {
+      // Generic placeholder data only (never real names/addresses).
       await prisma.property.create({
         data: {
           clientProfileId: profile.id,
           type: 'OWNER_OCCUPIED',
           address: '12 Sample St',
+          postcode: '2000',
           estimatedValue: 850000,
+          purchasePrice: 600000,
+          purchaseDate: new Date('2018-06-01'),
           mortgageBalance: 400000,
+          transactionType: 'OWNS_WITH_MORTGAGE',
+          includeInServicing: true,
           description: 'Family home',
+        },
+      });
+      await prisma.property.create({
+        data: {
+          clientProfileId: profile.id,
+          type: 'INVESTMENT',
+          address: '34 Example Ave',
+          postcode: '3000',
+          estimatedValue: 720000,
+          purchasePrice: 500000,
+          purchaseDate: new Date('2019-09-01'),
+          mortgageBalance: 350000,
+          transactionType: 'OWNS_WITH_MORTGAGE',
+          rentalIncomeAmount: 620,
+          rentalIncomeFrequency: 'WEEKLY',
+          eligibleNegativeGearing: true,
+          includeInServicing: true,
+          description: 'Investment unit',
         },
       });
     }

@@ -555,3 +555,107 @@ but requires the backend to set `Set-Cookie` directly and rearchitecting the
 fetch layer to rely on the cookie rather than an `Authorization` header.
 Until then, the primary defence against XSS remains the strict CSP and React's
 auto-escaping of dynamic content.
+
+
+
+## Servicing engine & Quickli-style modules (v2 upgrade)
+
+This release adds a configurable servicing engine and an expanded data model
+(applicants/households, detailed income, proposed/existing home loans, personal
+liabilities, extended living expenses, property ROI/growth, notes with linkage
+and a deal summary). All calculator outputs are labelled
+**"Indicative estimate only - not a credit decision."**
+
+### Central configuration (no hard-coding)
+
+All tunables live in [`backend/src/services/servicing.config.ts`](backend/src/services/servicing.config.ts):
+
+- **Income shading per category** — `INCOME_SHADING` maps each MAIN income
+  category (base salary, casual, commission, overtime, bonus, investment, etc.)
+  to the fraction counted toward serviceability (e.g. base salary 100%, variable
+  income ~80%). A per-entry `shadingOverride` always wins over the category
+  default.
+- **DTI cap, stress buffer, credit-card repayment %, HEM living-expense floors**
+  (per adult / per child) and **rental-income shading**.
+- **Bank-policy property presets** — `BANK_POLICY_LIMITS`: `ALL`, `TOP_3`,
+  `TOP_4`, `CUSTOM`. `TOP_N` selects the N highest properties by current value
+  (or equity).
+- **Frequencies** — WEEKLY/FORTNIGHTLY/MONTHLY/ANNUAL with 52/26/12 conversions
+  (`backend/src/utils/frequency.ts`).
+
+Any of the numeric tunables can be overridden at runtime via environment
+variables (see [`backend/.env.example`](backend/.env.example), e.g.
+`SERVICING_DTI_CAP`, `SERVICING_STRESS_BUFFER`, `SERVICING_MIN_EXPENSE_ADULT`).
+
+### Configuring income types & shading
+
+Edit `INCOME_SHADING` in `servicing.config.ts` to change how each category is
+shaded. The same category list is mirrored on the frontend dropdown in
+[`frontend/src/lib/income.ts`](frontend/src/lib/income.ts). To add a category,
+add it to `INCOME_CATEGORIES` + `INCOME_SHADING` (backend) and to the options
+list (frontend).
+
+### Hide / unhide from servicing
+
+Every Property, ProposedHomeLoan, ExistingHomeLoan and PersonalLiability has an
+`includeInServicing` boolean. The engine **filters out excluded items before**
+computing commitments, surplus and rental income. Toggle items in bulk via:
+
+```
+POST /api/client/servicing-selection
+{ "include": false, "propertyIds": ["..."], "personalLiabilityIds": ["..."] }
+```
+
+In the UI an excluded row is dimmed with an "Excluded from this calculation"
+badge, and headers show "X of Y included". The **Bank Policy** preset dropdown
+(All / Top 3 / Top 4 / Custom) drives the selection for properties.
+
+### Property ROI / growth (computed on the backend)
+
+`GET /api/client/properties` returns each property with a `growth` block, and
+`GET /api/client/properties/growth` returns a portfolio overview. Growth is
+computed in [`backend/src/services/servicing.ts`](backend/src/services/servicing.ts)
+from `purchasePrice` and `purchaseDate` (never recomputed on the client):
+
+- `capitalGrowth$ = currentValue - purchasePrice`
+- `capitalGrowth% = capitalGrowth$ / purchasePrice * 100`
+- `yearsHeld` from `purchaseDate` to now
+- `CAGR% = (currentValue / purchasePrice)^(1/yearsHeld) - 1`
+- `totalGrossRent = weeklyRent * 52 * yearsHeld`
+- `grossYield% = (weeklyRent * 52 / currentValue) * 100`
+
+All divide-by-zero / missing-`purchaseDate` cases return `null` for the affected
+metric (never `NaN`/`Infinity`). The dedicated **Property Growth & Progress**
+page lives at `/dashboard/properties/growth` and shows total portfolio value,
+equity, capital growth $/%, blended gross yield and per-property cards with a
+green/amber/red growth bar, CAGR, years held and yield. Admins can view the same
+data per client via `GET /api/admin/clients/:id` (each property carries `growth`).
+
+### Animated login & accessibility
+
+`/login` and `/admin-login` share an animated, deep-navy auth scene
+([`AuthScene`](frontend/src/components/ui/AuthScene.tsx) +
+[`AuthForm`](frontend/src/components/ui/AuthForm.tsx)): ~20 slowly drifting
+finance glyphs, a faint blueprint grid and three soft pulsing teal/gold radial
+blobs, with a frosted-glass card that fades/slides/scales in. The form has
+Client/Admin role tabs with a sliding pill, floating-label fields, show/hide
+password, a shimmer + spinner on submit, a success lift-and-fade before routing,
+and a horizontal wiggle + inline red error on failure.
+
+All motion is **pure CSS keyframes** (no animation libraries, no
+`next/font/google` — a system font stack is used so the build never performs a
+network font fetch). Every animation is disabled automatically under
+`@media (prefers-reduced-motion: reduce)`, and the form is fully
+keyboard-accessible (semantic tabs/labels, focus rings).
+
+### Database schemas (kept in lock-step)
+
+`backend/prisma/schema.prisma` (SQLite, dev) and
+`backend/prisma/schema.postgres.prisma` (PostgreSQL, prod) are kept
+**structurally identical** — every model/field change is applied to both. Only
+the generator/datasource headers differ (the dev schema additionally enables the
+`queryCompiler` preview so the SQLite driver-adapter client runs without a native
+query-engine binary; production uses the standard engine, which Render downloads
+during build). New optional columns are nullable (`?`) and their Zod schemas use
+`.nullable().optional()`; required columns stay required — keeping `tsc` happy on
+Render.

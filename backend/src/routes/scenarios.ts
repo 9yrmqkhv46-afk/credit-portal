@@ -2,8 +2,15 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { calculateBorrowingCapacity, CalculatorInput } from '../services/calculator';
-import { Frequency } from '../utils/frequency';
+import { Frequency, toMonthly } from '../utils/frequency';
+import {
+  computeServicing,
+  DetailedIncomeInput,
+  ExistingLoanInput,
+  PersonalLiabilityInput,
+  LivingExpensesInput,
+} from '../services/servicing';
+import { RENTAL_INCOME_SHADING } from '../services/servicing.config';
 
 const router = Router();
 
@@ -16,18 +23,44 @@ const scenarioSchema = z.object({
   interestRate: z.number().positive().max(1), // as decimal e.g., 0.06
 });
 
+const validFrequencies: Frequency[] = ['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL'];
+function parseFrequency(value: string): Frequency {
+  if (validFrequencies.includes(value as Frequency)) return value as Frequency;
+  throw new Error(`Invalid frequency value: ${value}`);
+}
+
+/**
+ * Map a legacy IncomeSource.type to a detailed income category so legacy data
+ * keeps contributing to serviceability after the income module upgrade.
+ */
+function legacyIncomeCategory(type: string): string {
+  switch (type.toUpperCase()) {
+    case 'SALARY': return 'BASE_SALARY_PAYG';
+    case 'BONUS': return 'BONUS_RECENT';
+    case 'COMMISSION': return 'COMMISSION';
+    case 'RENTAL': return 'INVESTMENT';
+    case 'INVESTMENT': return 'INVESTMENT';
+    case 'GOVERNMENT': return 'GOVERNMENT_PENSION';
+    default: return 'OTHER_TAXED';
+  }
+}
+
 // POST /api/loan-scenarios - create scenario, trigger calculation, save results
 router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const data = scenarioSchema.parse(req.body);
 
-    // Get client profile with all financial data
     const profile = await prisma.clientProfile.findUnique({
       where: { userId: req.user!.id },
       include: {
         incomeSources: true,
         existingDebts: true,
         expenseSummary: true,
+        incomeEntries: true,
+        livingExpenses: true,
+        existingHomeLoans: true,
+        personalLiabilities: true,
+        properties: true,
       },
     });
 
@@ -36,54 +69,104 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
       return;
     }
 
-    // Build calculator input from profile data
-    const expenses: CalculatorInput['expenses'] = [];
-    const validFrequencies: Frequency[] = ['WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'ANNUAL'];
-
-    function parseFrequency(value: string): Frequency {
-      if (validFrequencies.includes(value as Frequency)) {
-        return value as Frequency;
-      }
-      throw new Error(`Invalid frequency value: ${value}`);
-    }
-
-    if (profile.expenseSummary) {
-      const es = profile.expenseSummary;
-      if (es.groceries > 0) expenses.push({ amount: es.groceries, frequency: parseFrequency(es.groceriesFreq) });
-      if (es.utilities > 0) expenses.push({ amount: es.utilities, frequency: parseFrequency(es.utilitiesFreq) });
-      if (es.transport > 0) expenses.push({ amount: es.transport, frequency: parseFrequency(es.transportFreq) });
-      if (es.insurance > 0) expenses.push({ amount: es.insurance, frequency: parseFrequency(es.insuranceFreq) });
-      if (es.education > 0) expenses.push({ amount: es.education, frequency: parseFrequency(es.educationFreq) });
-      if (es.childcare > 0) expenses.push({ amount: es.childcare, frequency: parseFrequency(es.childcareFreq) });
-      if (es.entertainment > 0) expenses.push({ amount: es.entertainment, frequency: parseFrequency(es.entertainmentFreq) });
-      if (es.otherExpenses > 0) expenses.push({ amount: es.otherExpenses, frequency: parseFrequency(es.otherExpensesFreq) });
-    }
-
-    const calculatorInput: CalculatorInput = {
-      incomeSources: profile.incomeSources.map((inc: any) => ({
-        type: inc.type,
+    // --- Income: legacy income sources mapped to categories + new entries ---
+    const incomeEntries: DetailedIncomeInput[] = [
+      ...profile.incomeSources.map((inc: any) => ({
+        category: legacyIncomeCategory(inc.type),
         amount: inc.amount,
         frequency: parseFrequency(inc.frequency),
-        owner: inc.owner,
       })),
-      existingDebts: profile.existingDebts.map((debt: any) => ({
-        type: debt.type,
-        outstandingBalance: debt.outstandingBalance,
-        monthlyRepayment: debt.monthlyRepayment,
-        interestRate: debt.interestRate,
-        creditLimit: debt.creditLimit,
+      ...profile.incomeEntries.map((e: any) => ({
+        category: e.category,
+        amount: e.amount,
+        frequency: parseFrequency(e.frequency),
+        shadingOverride: e.shadingOverride,
+        hecsFlag: e.hecsFlag,
+        hecsAmount: e.hecsAmount,
       })),
-      expenses,
-      numberOfAdultDependants: profile.numberOfAdultDependants,
-      numberOfChildDependants: profile.numberOfChildDependants,
-      loanTermYears: data.loanTermYears,
-      interestRate: data.interestRate,
+    ];
+
+    // --- Living expenses: prefer the new model, else derive from legacy ---
+    let livingExpenses: LivingExpensesInput | null = null;
+    if (profile.livingExpenses) {
+      livingExpenses = profile.livingExpenses as any;
+    } else if (profile.expenseSummary) {
+      const es: any = profile.expenseSummary;
+      let basicMonthly = 0;
+      const add = (amt: number, freq: string) => { if (amt > 0) basicMonthly += toMonthly(amt, parseFrequency(freq)); };
+      add(es.groceries, es.groceriesFreq); add(es.utilities, es.utilitiesFreq);
+      add(es.transport, es.transportFreq); add(es.insurance, es.insuranceFreq);
+      add(es.education, es.educationFreq); add(es.childcare, es.childcareFreq);
+      add(es.entertainment, es.entertainmentFreq); add(es.otherExpenses, es.otherExpensesFreq);
+      livingExpenses = { basicExpenseAmount: basicMonthly, basicExpenseFrequency: 'MONTHLY' };
+    }
+
+    // --- Existing home loans (new model) + legacy HOME_LOAN debts ---
+    const existingLoans: ExistingLoanInput[] = [
+      ...profile.existingHomeLoans.map((l: any) => ({
+        loanAmount: l.loanAmount,
+        interestRate: l.interestRate,
+        termYears: l.termYears,
+        monthlyRepayment: l.monthlyRepayment,
+        includeInServicing: l.includeInServicing,
+      })),
+      ...profile.existingDebts
+        .filter((d: any) => d.type === 'HOME_LOAN')
+        .map((d: any) => ({
+          loanAmount: d.outstandingBalance,
+          interestRate: d.interestRate || data.interestRate,
+          termYears: 30,
+          monthlyRepayment: d.monthlyRepayment,
+          includeInServicing: true,
+        })),
+    ];
+
+    // --- Personal liabilities (new model) + legacy non-home debts ---
+    const personalLiabilities: PersonalLiabilityInput[] = [
+      ...profile.personalLiabilities.map((l: any) => ({
+        type: l.type,
+        limit: l.limit,
+        repaymentAmount: l.repaymentAmount,
+        includeInServicing: l.includeInServicing,
+      })),
+      ...profile.existingDebts
+        .filter((d: any) => d.type !== 'HOME_LOAN')
+        .map((d: any) => ({
+          type: d.type,
+          limit: d.creditLimit,
+          repaymentAmount: d.monthlyRepayment,
+          includeInServicing: true,
+        })),
+    ];
+
+    // --- Shaded rental income from INCLUDED investment/rental properties ---
+    let rentalMonthlyIncome = 0;
+    for (const p of profile.properties as any[]) {
+      if (p.includeInServicing === false) continue;
+      if (p.type === 'OWNER_OCCUPIED') continue;
+      let weekly = 0;
+      if (p.rentalIncomeAmount != null) {
+        weekly = (toMonthly(p.rentalIncomeAmount, parseFrequency(p.rentalIncomeFrequency || 'WEEKLY')) * 12) / 52;
+      } else if (p.rentalIncome != null) {
+        weekly = p.rentalIncome;
+      }
+      rentalMonthlyIncome += ((weekly * 52) / 12) * RENTAL_INCOME_SHADING;
+    }
+
+    const result = computeServicing({
+      incomeEntries,
+      livingExpenses,
+      existingLoans,
+      personalLiabilities,
+      rentalMonthlyIncome,
+      adults: 1 + profile.numberOfAdultDependants,
+      children: profile.numberOfChildDependants,
+      proposedLoanAmount: 0,
+      proposedInterestRate: data.interestRate,
+      proposedTermYears: data.loanTermYears,
       repaymentType: data.repaymentType,
-    };
+    });
 
-    const result = calculateBorrowingCapacity(calculatorInput);
-
-    // Save scenario with results
     const scenario = await prisma.loanScenario.create({
       data: {
         userId: req.user!.id,

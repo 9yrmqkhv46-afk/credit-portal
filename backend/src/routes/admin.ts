@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 import { prisma } from '../lib/prisma';
+import { computePropertyGrowth } from '../services/servicing';
 
 const router = Router();
 
@@ -63,6 +64,12 @@ router.get('/clients/:id', async (req: AuthRequest, res: Response): Promise<void
             existingDebts: true,
             properties: true,
             expenseSummary: true,
+            incomeEntries: true,
+            households: { include: { applicants: { include: { dependants: true } } } },
+            proposedHomeLoans: true,
+            existingHomeLoans: true,
+            personalLiabilities: true,
+            livingExpenses: true,
           },
         },
         loanScenarios: {
@@ -77,6 +84,12 @@ router.get('/clients/:id', async (req: AuthRequest, res: Response): Promise<void
     if (!client) {
       res.status(404).json({ error: 'Client not found.' });
       return;
+    }
+
+    // Attach backend-computed growth/ROI to each property for the admin view.
+    const profile: any = client.clientProfile;
+    if (profile && Array.isArray(profile.properties)) {
+      profile.properties = profile.properties.map((p: any) => ({ ...p, growth: computePropertyGrowth(p) }));
     }
 
     res.json({
@@ -99,6 +112,8 @@ router.get('/clients/:id', async (req: AuthRequest, res: Response): Promise<void
 const noteSchema = z.object({
   content: z.string().min(1, 'Note content is required'),
   visibility: z.enum(['ADMIN_ONLY', 'CLIENT_VISIBLE']).optional().default('ADMIN_ONLY'),
+  linkedEntityType: z.enum(['PROPERTY', 'EXISTING_LOAN', 'PROPOSED_LOAN']).nullable().optional(),
+  linkedEntityId: z.string().nullable().optional(),
 });
 
 // POST /api/admin/clients/:id/notes - add admin note
@@ -121,6 +136,8 @@ router.post('/clients/:id/notes', async (req: AuthRequest, res: Response): Promi
         content: data.content,
         visibility: data.visibility,
         authorId: req.user!.id,
+        linkedEntityType: data.linkedEntityType ?? null,
+        linkedEntityId: data.linkedEntityId ?? null,
       },
     });
 

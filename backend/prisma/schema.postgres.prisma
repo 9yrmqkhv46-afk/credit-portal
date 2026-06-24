@@ -10,7 +10,8 @@
 //   npx prisma generate --schema=prisma/schema.postgres.prisma
 //   npx prisma migrate deploy --schema=prisma/schema.postgres.prisma
 //
-// Keep both schemas in sync when changing models.
+// IMPORTANT: Keep both schemas STRUCTURALLY IDENTICAL when changing models.
+// Only the generator/datasource headers differ from ./schema.prisma.
 
 generator client {
   provider = "prisma-client-js"
@@ -56,10 +57,16 @@ model ClientProfile {
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
-  incomeSources  IncomeSource[]
-  existingDebts  ExistingDebt[]
-  properties     Property[]
-  expenseSummary ExpenseSummary?
+  incomeSources       IncomeSource[]
+  existingDebts       ExistingDebt[]
+  properties          Property[]
+  expenseSummary      ExpenseSummary?
+  households          Household[]
+  incomeEntries       IncomeEntry[]
+  proposedHomeLoans   ProposedHomeLoan[]
+  existingHomeLoans   ExistingHomeLoan[]
+  personalLiabilities PersonalLiability[]
+  livingExpenses      LivingExpenses?
 }
 
 // Owner: SELF | PARTNER
@@ -94,6 +101,7 @@ model ExistingDebt {
 }
 
 // Type: OWNER_OCCUPIED | INVESTMENT | RENTAL
+// TransactionType: OWNS_WITH_MORTGAGE | OWNS_OUTRIGHT | PURCHASING
 model Property {
   id              String   @id @default(uuid())
   clientProfileId String
@@ -104,6 +112,23 @@ model Property {
   mortgageBalance Float?
   rentalIncome    Float?
   description     String?
+
+  // --- Extended Quickli-style fields (all optional / additive) ---
+  postcode                   String?
+  purchasePrice              Float?
+  purchaseDate               DateTime?
+  transactionType            String?
+  holidayFlag                Boolean  @default(false)
+  eligibleNegativeGearing    Boolean  @default(false)
+  rentalIncomeAmount         Float?
+  rentalIncomeFrequency      String?
+  investmentExpenseAmount    Float?
+  investmentExpenseFrequency String?
+  valuationSource            String?
+  valuationDate              DateTime?
+  ownership                  String?
+  includeInServicing         Boolean  @default(true)
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -142,6 +167,9 @@ model LoanScenario {
   userId                String
   user                  User     @relation(fields: [userId], references: [id])
 
+  householdId           String?
+  household             Household? @relation(fields: [householdId], references: [id])
+
   purpose               String
   repaymentType         String   @default("PI")
   loanTermYears         Int      @default(30)
@@ -160,18 +188,206 @@ model LoanScenario {
   passesDti             Boolean?
   messages              String?
 
+  // Rich-text deal summary (free text / lightweight HTML).
+  dealSummary           String?
+
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
 
 // Visibility: ADMIN_ONLY | CLIENT_VISIBLE
+// LinkedEntityType: PROPERTY | EXISTING_LOAN | PROPOSED_LOAN | null
 model Note {
-  id         String   @id @default(uuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  content    String
-  visibility String   @default("ADMIN_ONLY")
-  authorId   String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  content          String
+  visibility       String   @default("ADMIN_ONLY")
+  authorId         String
+  linkedEntityType String?
+  linkedEntityId   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// ===========================================================================
+// Applicant & Household
+// ===========================================================================
+
+model Household {
+  id              String   @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+  name            String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  applicants    Applicant[]
+  loanScenarios LoanScenario[]
+}
+
+// Relationship: PRIMARY | SPOUSE | PARTNER | OTHER
+model Applicant {
+  id              String   @id @default(uuid())
+  householdId     String
+  household       Household @relation(fields: [householdId], references: [id])
+  name            String
+  relationship    String?
+  postcode        String?
+  dependantsCount Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  dependants    Dependant[]
+  incomeEntries IncomeEntry[]
+}
+
+model Dependant {
+  id          String   @id @default(uuid())
+  applicantId String
+  applicant   Applicant @relation(fields: [applicantId], references: [id])
+  age         Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ===========================================================================
+// Income (Quickli-style detailed income entries)
+// ===========================================================================
+// Category (MAIN): BASE_SALARY_PAYG | SECOND_PAYG | CASUAL | COMMISSION |
+//   OVERTIME | ESSENTIAL_OVERTIME | ALLOWANCES | BONUS_RECENT | BONUS_PREVIOUS |
+//   FOREIGN_PAYG | NET_FOREIGN | INVESTMENT | INTEREST | SUPER_ANNUITY | CARERS |
+//   GOVERNMENT_PENSION | COMPANY_CAR | CHILD_MAINTENANCE | OTHER_TAXED |
+//   OTHER_TAX_FREE | FAMILY_TAX_A | FAMILY_TAX_B | PARENTING_PAYMENT
+// EmploymentType: FULL_TIME_PERMANENT | PART_TIME | CASUAL | CONTRACT
+model IncomeEntry {
+  id              String   @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+  applicantId     String?
+  applicant       Applicant? @relation(fields: [applicantId], references: [id])
+
+  category        String
+  amount          Float
+  frequency       String   @default("ANNUAL")
+  shadingOverride Float?
+
+  // --- YTD detail block (per job) ---
+  jobNumber           Int?
+  employer            String?
+  employmentType      String?
+  industry            String?
+  startDate           DateTime?
+  payDate             DateTime?
+  payslipEndDate      DateTime?
+  payFrequency        String?
+  baseSalaryPerPeriod Float?
+  grossYtd            Float?
+  lessBonus           Float?
+  nonBaseToAllocate   Float?
+  nonBaseToOmit       Float?
+  useDetailedYtd      Boolean  @default(false)
+  useSecondPayslip    Boolean  @default(false)
+
+  // --- HECS / HELP ---
+  hecsFlag        Boolean  @default(false)
+  hecsAmount      Float?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ===========================================================================
+// Proposed & Existing Home Loans
+// ===========================================================================
+
+model ProposedHomeLoan {
+  id              String   @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+
+  productType        String?
+  investmentFlag     Boolean  @default(false)
+  loanAmount         Float
+  termYears          Int      @default(30)
+  ioTermYears        Int      @default(0)
+  interestRate       Float?
+  lvr                Float?
+  overrideRate       Boolean  @default(false)
+  securityLinks      Int      @default(0)
+  ownership          String?
+  includeInServicing Boolean  @default(true)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ExistingHomeLoan {
+  id              String   @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+
+  locFlag            Boolean  @default(false)
+  investmentFlag     Boolean  @default(false)
+  loanAmount         Float
+  interestRate       Float
+  termYears          Int      @default(30)
+  ioTermYears        Int      @default(0)
+  monthlyRepayment   Float?
+  lender             String?
+  securityLinks      Int      @default(0)
+  ownership          String?
+  includeInServicing Boolean  @default(true)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ===========================================================================
+// Personal Liabilities
+// ===========================================================================
+// Type: CREDIT_CARD | CAR_LOAN | PERSONAL_LOAN | HECS | OTHER
+model PersonalLiability {
+  id              String   @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+
+  type               String
+  limit              Float?
+  interestRate       Float?
+  remainingTermYears Float?
+  repaymentAmount    Float?
+  includeInServicing Boolean  @default(true)
+  description        String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ===========================================================================
+// Living Expenses (extended, HEM-style)
+// ===========================================================================
+model LivingExpenses {
+  id              String   @id @default(uuid())
+  clientProfileId String   @unique
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+
+  basicExpenseAmount    Float   @default(0)
+  basicExpenseFrequency String  @default("MONTHLY")
+
+  // Additional declared categories (all optional)
+  propertyTax             Float?
+  strataBodyCorp          Float?
+  privateSchoolFees       Float?
+  childSupportMaintenance Float?
+  privateHealthInsurance  Float?
+  lifeInsurance           Float?
+  secondaryResidenceCosts Float?
+  otherNonHem             Float?
+
+  useNotionalRent Boolean  @default(false)
+  rentBoardAmount Float?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
