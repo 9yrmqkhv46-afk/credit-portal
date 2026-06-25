@@ -144,6 +144,10 @@
 html {
   background: var(--glass-void);
   scroll-behavior: smooth;
+  /* Render native form controls (select popups, date pickers, scrollbars) in
+     dark mode so dropdown option text is light-on-dark instead of the browser
+     default light-on-light (which made option names invisible). */
+  color-scheme: dark;
 }
 
 body {
@@ -656,4 +660,21 @@ body::before {
 
 @media (prefers-reduced-motion: reduce) {
   .login-sweep, .login-panel { animation: none !important; }
+}
+
+
+/* ===========================================================================
+ * Dropdown contrast fix.
+ * Force dark backgrounds + light text on native <select> option popups so the
+ * names are always legible (profile, calculator, admin, team, auth dropdowns).
+ * Pairs with `color-scheme: dark` on <html> for browsers that ignore option
+ * background-color and theme the popup natively instead.
+ * ======================================================================== */
+select {
+  color: var(--text-primary);
+}
+select option,
+select optgroup {
+  background-color: #141d31;
+  color: #f0f5ff;
 }
