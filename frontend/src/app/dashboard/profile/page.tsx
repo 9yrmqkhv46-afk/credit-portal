@@ -22,6 +22,7 @@ import { ProposedHomeLoansTable } from '@/components/loans/ProposedHomeLoansTabl
 import { OtherLiabilitiesTable } from '@/components/liabilities/OtherLiabilitiesTable';
 import { LivingExpensesForm } from '@/components/expenses/LivingExpensesForm';
 import { ProfileCentre } from '@/components/profile/ProfileCentre';
+import { AssessmentSections } from '@/components/profile/AssessmentSections';
 
 /** Inline SVG section icons (no icon-font / no network). */
 const Icon = {
@@ -298,6 +299,12 @@ export default function ProfilePage() {
       <div className="animate-enter" style={{ animationDelay: '30ms' }}>
         <h2 className="mb-3 font-display text-lg font-semibold text-primary">Profile Centre</h2>
         <ProfileCentre />
+      </div>
+
+      <div className="animate-enter mt-6" style={{ animationDelay: '60ms' }}>
+        <h2 className="mb-1 font-display text-lg font-semibold text-primary">Detailed Assessment</h2>
+        <p className="mb-3 text-sm text-muted">Identity, address history, credit history, co-borrower, employment, and assets — as required on the full home-loan assessment.</p>
+        <AssessmentSections />
       </div>
 
       <div className="animate-enter" style={{ animationDelay: '50ms' }}>

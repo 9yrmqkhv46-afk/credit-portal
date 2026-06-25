@@ -41,21 +41,75 @@ const profileSchema = z.object({
   loanPurposePref: z.string().nullable().optional(),
   preferredLoanTerm: z.number().int().min(0).nullable().optional(),
   documentChecklist: z.string().nullable().optional(),
+
+  // --- Bluehive assessment extended fields (all additive / nullable) ---
+  borrowerType: z.string().nullable().optional(),
+  title: z.string().nullable().optional(),
+  isFirstHomeBuyer: z.boolean().optional(),
+  agesOfChildrenUnder18: z.string().nullable().optional(),
+  driverLicenceNumber: z.string().nullable().optional(),
+  driverLicenceExpiry: z.string().nullable().optional(),
+  passportNumber: z.string().nullable().optional(),
+  passportExpiry: z.string().nullable().optional(),
+  countryOfCitizenship: z.string().nullable().optional(),
+  currentAddressLivingArrangement: z.string().nullable().optional(),
+  currentAddressDateMovedIn: z.string().nullable().optional(),
+  previousAddress1: z.string().nullable().optional(),
+  previousAddress1DateMovedIn: z.string().nullable().optional(),
+  previousAddress1LivingArrangement: z.string().nullable().optional(),
+  previousAddress2: z.string().nullable().optional(),
+  previousAddress2DateMovedIn: z.string().nullable().optional(),
+  previousAddress2LivingArrangement: z.string().nullable().optional(),
+  hasDefaultsOrJudgements: z.boolean().optional(),
+  creditHistoryDetails: z.string().nullable().optional(),
+  mothersMaidenName: z.string().nullable().optional(),
+  nearestRelativeName: z.string().nullable().optional(),
+  nearestRelativeAddress: z.string().nullable().optional(),
+  nearestRelativePhone: z.string().nullable().optional(),
+  nearestRelativeRelationship: z.string().nullable().optional(),
+  isCompanyTrustBorrower: z.boolean().optional(),
+  companyName: z.string().nullable().optional(),
+  trustName: z.string().nullable().optional(),
+  companyAddress: z.string().nullable().optional(),
+  acn: z.string().nullable().optional(),
+  abn: z.string().nullable().optional(),
+  dateOfIncorporation: z.string().nullable().optional(),
+  specifiedBeneficiaries: z.string().nullable().optional(),
+  insuranceDetails: z.string().nullable().optional(),
+  preferredInterestType: z.string().nullable().optional(),
+  wantsOffsetAccount: z.boolean().optional(),
+  interestedInCarLoans: z.boolean().optional(),
+  interestedInEquipmentFinance: z.boolean().optional(),
+  interestedInCommercialFinance: z.boolean().optional(),
+  interestedInSMSF: z.boolean().optional(),
+  additionalNotes: z.string().nullable().optional(),
 });
 
 /** Convert optional date strings in a profile payload to Date objects. */
 function buildProfileData(data: z.infer<typeof profileSchema>) {
-  const { dateOfBirth, employmentStartDate, ...rest } = data;
+  const {
+    dateOfBirth, employmentStartDate, driverLicenceExpiry, passportExpiry,
+    currentAddressDateMovedIn, previousAddress1DateMovedIn, previousAddress2DateMovedIn,
+    dateOfIncorporation, ...rest
+  } = data;
   const toDate = (v?: string | null): Date | null | undefined => {
     if (v === undefined) return undefined;
     if (v === null || v === '') return null;
     const d = new Date(v);
     return Number.isNaN(d.getTime()) ? undefined : d;
   };
+  const dateField = (key: string, v?: string | null) =>
+    v !== undefined ? { [key]: toDate(v) } : {};
   return {
     ...rest,
     ...(dateOfBirth !== undefined ? { dateOfBirth: toDate(dateOfBirth) ?? undefined } : {}),
     ...(employmentStartDate !== undefined ? { employmentStartDate: toDate(employmentStartDate) } : {}),
+    ...dateField('driverLicenceExpiry', driverLicenceExpiry),
+    ...dateField('passportExpiry', passportExpiry),
+    ...dateField('currentAddressDateMovedIn', currentAddressDateMovedIn),
+    ...dateField('previousAddress1DateMovedIn', previousAddress1DateMovedIn),
+    ...dateField('previousAddress2DateMovedIn', previousAddress2DateMovedIn),
+    ...dateField('dateOfIncorporation', dateOfIncorporation),
   };
 }
 
@@ -69,6 +123,11 @@ router.get('/profile', async (req: AuthRequest, res: Response): Promise<void> =>
         existingDebts: true,
         properties: true,
         expenseSummary: true,
+        coBorrower: true,
+        employments: true,
+        bankAccounts: true,
+        nonPropertyAssets: true,
+        brokerDetails: true,
       },
     });
 

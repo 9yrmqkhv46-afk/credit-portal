@@ -77,6 +77,58 @@ model ClientProfile {
   preferredLoanTerm   Int?
   documentChecklist   String?
 
+  // --- Bluehive assessment: extended personal / compliance fields (additive) ---
+  borrowerType          String?   // Applicant | Guarantor
+  title                 String?   // Mr | Mrs | Ms | Dr | Other
+  isFirstHomeBuyer      Boolean   @default(false)
+  agesOfChildrenUnder18 String?   // comma-separated, e.g. "5,8,12"
+
+  // ID documents
+  driverLicenceNumber   String?
+  driverLicenceExpiry   DateTime?
+  passportNumber        String?
+  passportExpiry        DateTime?
+  countryOfCitizenship  String?
+
+  // Address history (3-year rule)
+  currentAddressLivingArrangement   String?  // Own | Mortgage | Renting
+  currentAddressDateMovedIn         DateTime?
+  previousAddress1                  String?
+  previousAddress1DateMovedIn       DateTime?
+  previousAddress1LivingArrangement String?
+  previousAddress2                  String?
+  previousAddress2DateMovedIn       DateTime?
+  previousAddress2LivingArrangement String?
+
+  // Credit history + emergency contact
+  hasDefaultsOrJudgements     Boolean @default(false)
+  creditHistoryDetails        String?
+  mothersMaidenName           String?
+  nearestRelativeName         String?
+  nearestRelativeAddress      String?
+  nearestRelativePhone        String?
+  nearestRelativeRelationship String?
+
+  // Company / Trust borrower
+  isCompanyTrustBorrower Boolean   @default(false)
+  companyName            String?
+  trustName              String?
+  companyAddress         String?
+  acn                    String?
+  abn                    String?
+  dateOfIncorporation    DateTime?
+  specifiedBeneficiaries String?
+
+  // Insurance + loan preferences + other-services interest
+  insuranceDetails              String?
+  preferredInterestType         String?  // Variable | Fixed | Split
+  wantsOffsetAccount            Boolean @default(false)
+  interestedInCarLoans          Boolean @default(false)
+  interestedInEquipmentFinance  Boolean @default(false)
+  interestedInCommercialFinance Boolean @default(false)
+  interestedInSMSF              Boolean @default(false)
+  additionalNotes               String?
+
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
@@ -90,6 +142,11 @@ model ClientProfile {
   existingHomeLoans   ExistingHomeLoan[]
   personalLiabilities PersonalLiability[]
   livingExpenses      LivingExpenses?
+  coBorrower          CoBorrowerProfile?
+  employments         Employment[]
+  bankAccounts        BankAccount[]
+  nonPropertyAssets   NonPropertyAsset[]
+  brokerDetails       BrokerCompletedDetails?
 }
 
 // Owner: SELF | PARTNER
@@ -456,6 +513,138 @@ model LivingExpenses {
   updatedAt       DateTime @updatedAt
 }
 
+
+// ===========================================================================
+// Bluehive assessment: Co-Borrower, Employment history, Assets, Broker details
+// ===========================================================================
+
+// Borrower 2 (spouse / partner / co-applicant). 1:1 with ClientProfile.
+model CoBorrowerProfile {
+  id              String        @id @default(uuid())
+  clientProfileId String        @unique
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+
+  relationshipToBorrower1 String?
+  borrowerType            String?
+  title                   String?
+  firstName               String?
+  middleName              String?
+  lastName                String?
+  dateOfBirth             DateTime?
+  maritalStatus           String?
+  numberOfChildrenUnder18 Int      @default(0)
+  agesOfChildrenUnder18   String?
+  currentAddress                  String?
+  currentAddressDateMovedIn       DateTime?
+  currentAddressLivingArrangement String?
+  homePhone               String?
+  mobilePhone             String?
+  email                   String?
+
+  driverLicenceNumber  String?
+  driverLicenceExpiry  DateTime?
+  passportNumber       String?
+  passportExpiry       DateTime?
+  countryOfCitizenship String?
+  residencyStatus      String?
+  visaSubclass         String?
+
+  previousAddress1                  String?
+  previousAddress1DateMovedIn       DateTime?
+  previousAddress1LivingArrangement String?
+  previousAddress2                  String?
+  previousAddress2DateMovedIn       DateTime?
+  previousAddress2LivingArrangement String?
+
+  hasDefaultsOrJudgements     Boolean @default(false)
+  creditHistoryDetails        String?
+  mothersMaidenName           String?
+  nearestRelativeName         String?
+  nearestRelativeAddress      String?
+  nearestRelativePhone        String?
+  nearestRelativeRelationship String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Employment history (current + previous) for both borrowers (3-year rule).
+// owner: SELF | PARTNER ; employmentType: FULL_TIME | PART_TIME | CASUAL | CONTRACT | SELF_EMPLOYED | RETIRED | UNEMPLOYED
+model Employment {
+  id              String        @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+
+  owner               String   @default("SELF")
+  sequence            Int      @default(1)
+  isSelfEmployed      Boolean  @default(false)
+  abn                 String?
+  employerName        String?
+  employerAddress     String?
+  employerPhone       String?
+  contactName         String?
+  employmentType      String?
+  jobTitle            String?
+  dateStarted         DateTime?
+  dateFinished        DateTime?
+  annualSalaryExSuper Float?
+  includesBonus       Boolean  @default(false)
+  includesCommission  Boolean  @default(false)
+  includesOvertime    Boolean  @default(false)
+  includesAllowances  Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Non-property cash assets (bank / term deposit / offset).
+// accountType: SAVINGS | TRANSACTION | TERM_DEPOSIT | OFFSET | OTHER
+model BankAccount {
+  id              String        @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+
+  institution    String?
+  accountNumber  String?
+  balance        Float?
+  accountHolders String?
+  accountType    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// All other (non-property) assets.
+// assetType: SHARES | INVESTMENT_FUNDS | SUPERANNUATION | HOME_CONTENTS | MOTOR_VEHICLE | BOAT | CARAVAN | OTHER
+model NonPropertyAsset {
+  id              String        @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+
+  assetType   String
+  description String?
+  value       Float?
+  owner       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Broker-completed section (admin only). 1:1 with ClientProfile.
+model BrokerCompletedDetails {
+  id              String        @id @default(uuid())
+  clientProfileId String        @unique
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id])
+
+  conveyancerName    String?
+  conveyancerAddress String?
+  conveyancerPhone   String?
+  conveyancerEmail   String?
+  lenderSelected     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 
 // ===========================================================================
 // Loan Application Status Timeline (Mandate 2)
