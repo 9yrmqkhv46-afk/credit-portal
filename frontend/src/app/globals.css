@@ -635,3 +635,25 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   body::before { animation: none !important; }
 }
+
+
+/* ===========================================================================
+ * Mandate 5 — Section F: post-login transitions.
+ * Client: a teal gradient sweep wipes across, then off to the right.
+ * Admin: glass panels assemble from the corners (staggered).
+ * ======================================================================== */
+@keyframes loginSweep {
+  0% { clip-path: inset(0 100% 0 0); }
+  55% { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 0 0 100%); }
+}
+@keyframes loginPanelIn {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+.login-sweep { animation: loginSweep 0.7s var(--ease-decel) both; }
+.login-panel { animation: loginPanelIn 0.5s var(--ease-spring) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .login-sweep, .login-panel { animation: none !important; }
+}

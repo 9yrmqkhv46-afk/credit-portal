@@ -26,6 +26,8 @@ interface Props {
   onReact?: (messageId: string, reactions: string[]) => void;
   onResolve?: (messageId: string, resolved: boolean) => void;
   onFlag?: (messageId: string, flagged: boolean) => void;
+  /** Toggle pin state on a message (admin). */
+  onPin?: (messageId: string, pinned: boolean) => void;
   /** Opens the Schedule Teams Meeting modal (owned by the page). */
   onScheduleMeeting?: () => void;
 }
@@ -83,7 +85,7 @@ function Ticks({ status }: { status: Message['status'] }) {
 
 export function MessageThread({
   messages, viewerRole, headerTitle, headerSubtitle, stageLabel, stageHref,
-  admin = false, live = false, onSend, onReact, onResolve, onFlag, onScheduleMeeting,
+  admin = false, live = false, onSend, onReact, onResolve, onFlag, onPin, onScheduleMeeting,
 }: Props) {
   const [draft, setDraft] = useState('');
   const [showAttach, setShowAttach] = useState(false);
@@ -95,17 +97,53 @@ export function MessageThread({
   const [uploading, setUploading] = useState(false);
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [lightbox, setLightbox] = useState<{ src: string; name: string } | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [search, setSearch] = useState('');
+  const [matchIdx, setMatchIdx] = useState(0);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const [, setTick] = useState(0); // drives read-receipt re-render at transitions
 
   const feedRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const didInitialScroll = useRef(false);
+  const msgRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const ordered = useMemo(
     () => [...messages].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     [messages]
   );
+
+  // Message search — ids of messages matching the query, in thread order.
+  const matchIds = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return [];
+    return ordered
+      .filter((m) => (m.body || '').toLowerCase().includes(term) || (m.cardData || '').toLowerCase().includes(term))
+      .map((m) => m.id);
+  }, [ordered, search]);
+
+  const pinnedMessages = useMemo(() => ordered.filter((m) => m.pinned), [ordered]);
+
+  const scrollToMessage = (id: string) => {
+    const el = msgRefs.current[id];
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  // When the match set changes, jump to the first match.
+  useEffect(() => {
+    if (matchIds.length === 0) return;
+    setMatchIdx(0);
+    scrollToMessage(matchIds[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchIds.length]);
+
+  const gotoMatch = (dir: 1 | -1) => {
+    if (matchIds.length === 0) return;
+    const next = (matchIdx + dir + matchIds.length) % matchIds.length;
+    setMatchIdx(next);
+    scrollToMessage(matchIds[next]);
+  };
 
   // Always start scrolled to the bottom; jump instantly on first render, then
   // smooth-scroll as new messages arrive.
@@ -288,6 +326,16 @@ export function MessageThread({
               {stageLabel}
             </a>
           )}
+          <button
+            type="button"
+            aria-label="Search messages"
+            onClick={() => { setShowSearch((s) => !s); if (showSearch) setSearch(''); }}
+            className={`rounded-lg p-1.5 ring-1 ring-white/12 hover:bg-white/10 hover:text-primary ${showSearch ? 'bg-brand-light text-brand' : 'text-muted'}`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" strokeLinecap="round" />
+            </svg>
+          </button>
           {['phone', 'video', 'profile'].map((k) => (
             <button key={k} type="button" aria-label={k} onClick={() => headerAction(k)} className="rounded-lg p-1.5 text-muted ring-1 ring-white/12 hover:bg-white/10 hover:text-primary">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -299,6 +347,43 @@ export function MessageThread({
           ))}
         </div>
       </div>
+
+      {/* Search bar (slides down from header) */}
+      {showSearch && (
+        <div className="bubble-in flex items-center gap-2 border-b border-white/10 bg-white/4 px-4 py-2">
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') gotoMatch(e.shiftKey ? -1 : 1); if (e.key === 'Escape') { setShowSearch(false); setSearch(''); } }}
+            placeholder="Search this conversation…"
+            className="glass-input flex-1 rounded-lg border border-white/15 px-3 py-1.5 text-sm text-primary focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+          />
+          <span className="tnum whitespace-nowrap text-xs text-muted">
+            {matchIds.length > 0 ? `${matchIdx + 1} of ${matchIds.length}` : search.trim() ? 'No matches' : ''}
+          </span>
+          <button type="button" aria-label="Previous match" onClick={() => gotoMatch(-1)} disabled={matchIds.length === 0} className="rounded-md px-1.5 text-muted hover:text-primary disabled:opacity-30">↑</button>
+          <button type="button" aria-label="Next match" onClick={() => gotoMatch(1)} disabled={matchIds.length === 0} className="rounded-md px-1.5 text-muted hover:text-primary disabled:opacity-30">↓</button>
+          <button type="button" aria-label="Close search" onClick={() => { setShowSearch(false); setSearch(''); }} className="rounded-md px-1.5 text-muted hover:text-primary">×</button>
+        </div>
+      )}
+
+      {/* Pinned messages panel */}
+      {pinnedMessages.length > 0 && (
+        <div className="border-b border-white/10 bg-gold-light/40 px-4 py-2">
+          <p className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-gold">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 2l8 8-4 1-3 7-2-6-6-2 7-3 1-4z" /></svg>
+            {pinnedMessages.length} pinned
+          </p>
+          <div className="space-y-1">
+            {pinnedMessages.map((m) => (
+              <button key={m.id} type="button" onClick={() => scrollToMessage(m.id)} className="block w-full truncate rounded-md px-2 py-1 text-left text-xs text-secondary hover:bg-white/10 hover:text-primary">
+                {m.body || (m.type !== 'text' ? m.type.replace('_', ' ') : 'Message')}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {note && (
         <div className="bubble-in border-b border-white/10 bg-brand-light/60 px-4 py-2 text-center text-xs font-medium text-brand">
@@ -322,6 +407,10 @@ export function MessageThread({
             if (m.type !== 'text' || !m.cardData) return null;
             try { return JSON.parse(m.cardData); } catch { return null; }
           })();
+          const searching = search.trim().length > 0;
+          const isMatch = matchIds.includes(m.id);
+          const isCurrentMatch = matchIds[matchIdx] === m.id;
+          const dimmed = searching && !isMatch;
 
           return (
             <React.Fragment key={m.id}>
@@ -338,7 +427,7 @@ export function MessageThread({
                 </div>
               ) : (
                 <div className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`group relative max-w-[78%] ${isOutgoing ? 'items-end' : 'items-start'}`}>
+                  <div ref={(el) => { msgRefs.current[m.id] = el; }} className={`group relative max-w-[78%] transition-opacity ${isOutgoing ? 'items-end' : 'items-start'} ${dimmed ? 'opacity-30' : ''}`}>
                     {showSender && (
                       <p className={`mb-0.5 text-[11px] font-medium text-muted ${isOutgoing ? 'text-right' : 'text-left'}`}>
                         {m.senderRole === 'ADMIN' ? 'TransformBiz' : m.senderRole === 'CLIENT' ? (admin ? headerTitle : 'You') : ''}
@@ -351,6 +440,8 @@ export function MessageThread({
                         isOutgoing
                           ? 'rounded-[18px_18px_4px_18px] bg-brand/20 text-primary ring-1 ring-brand/30'
                           : 'glass-2 rounded-[18px_18px_18px_4px] text-primary',
+                        isCurrentMatch ? 'ring-2 ring-gold' : '',
+                        m.pinned ? 'border-l-2 border-gold' : '',
                       ].join(' ')}
                     >
                       {quoted?.quotedText && (
@@ -388,6 +479,11 @@ export function MessageThread({
                           <circle cx="12" cy="12" r="9" /><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" strokeLinecap="round" />
                         </svg>
                       </button>
+                      {admin && onPin && (
+                        <button type="button" aria-label={m.pinned ? 'Unpin' : 'Pin'} onClick={() => onPin(m.id, !m.pinned)} className={`rounded-full bg-white/8 p-1 ring-1 ring-white/12 hover:text-primary ${m.pinned ? 'text-gold' : 'text-muted'}`}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 2l8 8-4 1-3 7-2-6-6-2 7-3 1-4z" /></svg>
+                        </button>
+                      )}
                     </div>
 
                     {reactions.length > 0 && (
@@ -516,6 +612,16 @@ export function MessageThread({
               </svg>
             )}
           </button>
+          <button
+            type="button"
+            aria-label="Record voice note"
+            onClick={() => setVoiceOpen(true)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-secondary ring-1 ring-white/15 hover:bg-white/10 hover:text-primary"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 11a7 7 0 0014 0M12 18v3" strokeLinecap="round" />
+            </svg>
+          </button>
           <textarea
             ref={taRef}
             value={draft}
@@ -553,6 +659,21 @@ export function MessageThread({
                 <button type="button" onClick={() => setLightbox(null)} className="rounded-lg px-3 py-1 text-xs font-semibold text-secondary ring-1 ring-white/20 hover:bg-white/10">Close</button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Voice note placeholder modal */}
+      {voiceOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => setVoiceOpen(false)}>
+          <div className="glass-4 animate-pop relative w-full max-w-sm rounded-2xl p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand/20 text-brand">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 11a7 7 0 0014 0M12 18v3" strokeLinecap="round" />
+              </svg>
+            </span>
+            <h3 className="font-display text-lg font-semibold text-primary">Voice messages</h3>
+            <p className="mt-1 text-sm text-secondary">Voice messages require backend storage integration. Contact your developer to enable.</p>
+            <button type="button" onClick={() => setVoiceOpen(false)} className="mt-4 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-on-accent hover:brightness-110">Got it</button>
           </div>
         </div>
       )}

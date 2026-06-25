@@ -65,12 +65,14 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
   const router = useRouter();
   const { login, logout } = useAuth();
   const [role, setRole] = useState<RoleTab>(defaultRole);
+  const [subRole, setSubRole] = useState('SENIOR_BROKER');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [transition, setTransition] = useState<null | 'CLIENT' | 'ADMIN'>(null);
   const [wiggle, setWiggle] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -98,10 +100,17 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
         triggerWiggle('These credentials are not authorized for administrator access.');
         return;
       }
+      // Persist the selected admin sub-role for display/permission hints.
+      if (user.role === 'ADMIN' && typeof window !== 'undefined') {
+        localStorage.setItem('adminSubRole', subRole);
+      }
       setSuccess(true);
-      window.setTimeout(() => {
-        router.push(user.role === 'ADMIN' ? '/admin' : '/dashboard');
-      }, 480);
+      // Role-specific post-login transition overlay, then navigate.
+      const dest = user.role === 'ADMIN' ? '/admin' : '/dashboard';
+      const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      if (reduced) { router.push(dest); return; }
+      setTransition(user.role === 'ADMIN' ? 'ADMIN' : 'CLIENT');
+      window.setTimeout(() => router.push(dest), 680);
     } catch (err) {
       const axiosError = err as AxiosError<{ error?: string }>;
       setLoading(false);
@@ -112,6 +121,18 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
   return (
     <div className="relative flex min-h-screen items-center justify-center px-4">
       <AuthScene />
+
+      {/* Post-login transition overlays (Mandate 5 — Section F) */}
+      {transition === 'CLIENT' && (
+        <div className="login-sweep fixed inset-0 z-[200]" aria-hidden="true" style={{ background: 'linear-gradient(90deg, var(--accent-teal), #024e54)' }} />
+      )}
+      {transition === 'ADMIN' && (
+        <div className="fixed inset-0 z-[200] grid grid-cols-2 grid-rows-2" aria-hidden="true">
+          {[0, 1, 2, 3].map((i) => (
+            <span key={i} className="login-panel" style={{ animationDelay: `${i * 60}ms`, background: 'linear-gradient(135deg, rgba(0,196,212,0.30), rgba(2,78,84,0.75))' }} />
+          ))}
+        </div>
+      )}
       {/* Orbiting finance-symbol pills around the card (visionOS signature).
           Motion is disabled under prefers-reduced-motion via globals.css. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden items-center justify-center sm:flex">
@@ -164,16 +185,38 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
           >
             Client
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={role === 'ADMIN'}
-            onClick={() => setRole('ADMIN')}
-            className={`relative z-10 rounded-lg py-2 transition-colors ${role === 'ADMIN' ? 'text-white' : 'text-white/60'}`}
-          >
-            Admin
-          </button>
         </div>
+
+        {/* Context-aware heading (Mandate 5 — Section F) */}
+        <div className="mt-5 flex items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#01696f]/30 text-[#5fd6dd]">
+            {role === 'ADMIN' ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 8h18v11a1 1 0 01-1 1H4a1 1 0 01-1-1V8zM8 8V6a2 2 0 012-2h4a2 2 0 012 2v2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 11l9-8 9 8M5 10v10h14V10" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            )}
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-white">{role === 'ADMIN' ? 'Team Login' : 'Welcome back'}</p>
+            <p className="text-xs text-white/55">{role === 'ADMIN' ? 'Manage your clients and applications.' : 'Track your loan application in real time.'}</p>
+          </div>
+        </div>
+
+        {role === 'ADMIN' && (
+          <div className="mt-3">
+            <label htmlFor="subrole" className="mb-1 block text-xs font-medium text-white/60">Sign in as</label>
+            <select
+              id="subrole"
+              value={subRole}
+              onChange={(e) => setSubRole(e.target.value)}
+              className="w-full rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm text-white focus:border-[#d19900] focus:outline-none focus:ring-2 focus:ring-[#d19900]/40"
+            >
+              <option value="SENIOR_BROKER">Senior Broker</option>
+              <option value="BROKER">Broker</option>
+              <option value="ASSISTANT">Assistant</option>
+            </select>
+          </div>
+        )}
 
         {error && (
           <p role="alert" className="mt-4 rounded-lg border border-red-400/40 bg-red-500/15 px-3 py-2 text-sm text-red-200">
@@ -215,6 +258,32 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
             {role === 'ADMIN' ? 'Sign In as Administrator' : 'Sign In'}
           </button>
         </form>
+
+        {/* Role-specific preview below the form */}
+        {role === 'CLIENT' ? (
+          <div className="mt-4">
+            <div className="flex items-center justify-center gap-1.5 opacity-60">
+              {['Pre-Approval', 'Contract', 'Settlement'].map((s, i) => (
+                <React.Fragment key={s}>
+                  {i > 0 && <span className="text-white/30" aria-hidden="true">→</span>}
+                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/70">{s}</span>
+                </React.Fragment>
+              ))}
+            </div>
+            <p className="mt-2 text-center text-[11px] text-white/40">First time here? Ask your broker for your login link.</p>
+          </div>
+        ) : (
+          <div className="mt-4">
+            <div className="flex items-center justify-center gap-2 opacity-50" style={{ filter: 'blur(0.4px)' }}>
+              {[['Active Clients', '24'], ['Pending Stages', '7'], ['New Messages', '3']].map(([l, v]) => (
+                <span key={l} className="rounded-lg bg-white/10 px-2.5 py-1 text-center text-[10px] text-white/70">
+                  <span className="block text-sm font-bold text-[#5fd6dd]">{v}</span>{l}
+                </span>
+              ))}
+            </div>
+            <p className="mt-2 text-center text-[11px] text-white/40">Forgot your access?</p>
+          </div>
+        )}
 
         <p className="mt-5 text-center text-xs text-white/50">
           {role === 'ADMIN' ? (

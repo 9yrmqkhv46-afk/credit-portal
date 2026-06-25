@@ -222,6 +222,8 @@ export interface AdminClientListItem {
     status: ClientStatus;
   } | null;
   loanScenarios: LoanScenario[];
+  /** ISO timestamp of the most recent message in the thread (admin list). */
+  lastMessageAt?: string | null;
 }
 
 export interface AdminClientDetail {
@@ -472,6 +474,7 @@ export interface Message {
   status: MessageStatus;
   resolved: boolean;
   flagged: boolean;
+  pinned?: boolean;
   reactions: string | null;
   createdAt: string;
 }
