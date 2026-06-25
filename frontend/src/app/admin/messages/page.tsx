@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Spinner } from '@/components/ui/Spinner';
 import { MessageThread } from '@/components/messaging/MessageThread';
+import { MeetingModal, CreatedMeeting } from '@/components/messaging/MeetingModal';
 import { useToast } from '@/components/ui/Toast';
 import api from '@/lib/api';
 import { Message, MessageType, AdminClientListItem } from '@/types';
@@ -13,6 +14,7 @@ export default function AdminMessagesPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingThread, setLoadingThread] = useState(false);
+  const [meetingOpen, setMeetingOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -70,6 +72,22 @@ export default function AdminMessagesPage() {
     } catch { /* ignore */ }
   };
 
+  const handleMeetingCreated = (m: CreatedMeeting) => {
+    handleSend({
+      type: 'meeting_request',
+      body: m.subject,
+      cardData: {
+        subject: m.subject,
+        startDateTime: m.startDateTime,
+        endDateTime: m.endDateTime,
+        joinWebUrl: m.joinWebUrl,
+        joinUrl: m.joinUrl,
+        durationMins: m.durationMins,
+        attendees: m.attendees,
+      },
+    });
+  };
+
   if (loading) return <Spinner size="lg" className="py-20" />;
 
   return (
@@ -116,6 +134,7 @@ export default function AdminMessagesPage() {
               stageHref={`/admin/clients/${selectedClient.id}`}
               onSend={handleSend}
               live
+              onScheduleMeeting={() => setMeetingOpen(true)}
               onReact={(id, reactions) => patchMsg(id, { reactions })}
               onResolve={(id, resolved) => patchMsg(id, { resolved })}
               onFlag={(id, flagged) => patchMsg(id, { flagged })}
@@ -125,6 +144,16 @@ export default function AdminMessagesPage() {
           )}
         </section>
       </div>
+
+      {selectedClient && (
+        <MeetingModal
+          open={meetingOpen}
+          onClose={() => setMeetingOpen(false)}
+          defaultSubject={`Loan Review — ${selectedClient.name}`}
+          defaultAttendee={selectedClient.email}
+          onCreated={handleMeetingCreated}
+        />
+      )}
     </div>
   );
 }

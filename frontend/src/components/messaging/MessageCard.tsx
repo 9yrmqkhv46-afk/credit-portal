@@ -2,17 +2,19 @@
 
 import React from 'react';
 import { Message } from '@/types';
+import { downloadICS } from '@/lib/ics';
 
 interface MessageCardProps {
   message: Message;
   /** Document-request "Upload documents" action. */
   onUpload?: () => void;
+  /** Open an image attachment in the lightbox. */
+  onImageClick?: (src: string, name: string) => void;
   /** Meeting-request actions. */
   onMeetingAccept?: () => void;
   onMeetingReschedule?: () => void;
 }
 
-/** Parse the JSON cardData string safely. */
 function parseCard(message: Message): Record<string, unknown> | null {
   if (!message.cardData) return null;
   try {
@@ -36,12 +38,23 @@ function fileSize(bytes: unknown): string {
   return `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/**
- * Renders the structured CARD message types (stage_update, document_request,
- * borrowing_summary, meeting_request, attachment) with their action affordances.
- * Returns null for plain text messages.
- */
-export function MessageCard({ message, onUpload, onMeetingAccept, onMeetingReschedule }: MessageCardProps) {
+/** Format an ISO datetime in AEST, e.g. "Thu 26 Jun · 10:00 AM AEST". */
+function fmtMeeting(iso: unknown): string {
+  if (typeof iso !== 'string') return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  try {
+    return new Intl.DateTimeFormat('en-AU', {
+      timeZone: 'Australia/Sydney',
+      weekday: 'short', day: '2-digit', month: 'short',
+      hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short',
+    }).format(d);
+  } catch {
+    return d.toLocaleString();
+  }
+}
+
+export function MessageCard({ message, onUpload, onImageClick, onMeetingAccept, onMeetingReschedule }: MessageCardProps) {
   if (message.type === 'text') return null;
   const card = parseCard(message);
 
@@ -55,10 +68,10 @@ export function MessageCard({ message, onUpload, onMeetingAccept, onMeetingResch
     if (isImage && dataUrl) {
       return (
         <div className="overflow-hidden rounded-xl">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <a href={dataUrl} download={fileName} target="_blank" rel="noopener noreferrer">
-            <img src={dataUrl} alt={fileName} className="max-h-64 w-full max-w-xs rounded-xl object-cover" />
-          </a>
+          <button type="button" onClick={() => onImageClick?.(dataUrl, fileName)} className="block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={dataUrl} alt={fileName} className="h-[100px] w-[150px] cursor-zoom-in rounded-xl object-cover" />
+          </button>
           <div className="mt-1 flex items-center justify-between gap-2 text-xs text-secondary">
             <span className="truncate">{fileName}</span>
             {sizeLabel && <span className="tnum shrink-0 text-muted">{sizeLabel}</span>}
@@ -68,24 +81,19 @@ export function MessageCard({ message, onUpload, onMeetingAccept, onMeetingResch
     }
 
     return (
-      <a
-        href={dataUrl || undefined}
-        download={fileName}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-3 rounded-xl border border-white/12 bg-white/6 p-2.5 transition hover:bg-white/10"
-      >
+      <div className="flex items-center gap-3 rounded-xl border border-white/12 bg-white/6 p-2.5">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/20 text-brand">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M14 2v6h6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
-        <span className="min-w-0">
+        <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-primary">{fileName}</span>
-          <span className="block text-xs text-muted">{sizeLabel ? `${sizeLabel} · ` : ''}Tap to download</span>
+          <span className="block text-xs text-muted">{sizeLabel ? `${sizeLabel} · ` : ''}{(mimeType.split('/')[1] || 'file').toUpperCase()}</span>
         </span>
-      </a>
+        <a href={dataUrl || undefined} download={fileName} className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-brand ring-1 ring-brand/40 hover:bg-brand-light">Download</a>
+      </div>
     );
   }
 
@@ -142,31 +150,60 @@ export function MessageCard({ message, onUpload, onMeetingAccept, onMeetingResch
   }
 
   if (message.type === 'meeting_request') {
+    const joinUrl = typeof card?.joinWebUrl === 'string' ? (card.joinWebUrl as string)
+      : typeof card?.joinUrl === 'string' ? (card.joinUrl as string) : '';
+    const startISO = typeof card?.startDateTime === 'string' ? (card.startDateTime as string) : '';
+    const endISO = typeof card?.endDateTime === 'string' ? (card.endDateTime as string) : '';
+    const when = startISO ? fmtMeeting(startISO) : String(card?.proposed ?? 'TBC');
+    const title = String(card?.subject ?? card?.title ?? 'Proposed meeting');
+    const attendees = Array.isArray(card?.attendees) ? (card!.attendees as unknown[]).map(String) : [];
+    const isScheduled = Boolean(joinUrl || startISO);
+
+    const addToCalendar = () => {
+      const start = startISO ? new Date(startISO) : new Date();
+      const end = endISO ? new Date(endISO) : new Date(start.getTime() + 30 * 60000);
+      downloadICS({
+        title,
+        start,
+        end,
+        description: joinUrl ? `Join Teams meeting: ${joinUrl}` : 'LendVision meeting',
+        location: joinUrl || 'Microsoft Teams',
+        url: joinUrl || undefined,
+      }, 'meeting.ics');
+    };
+
     return (
       <div className="rounded-xl border border-sapphire/30 bg-accent-light/60 p-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-sapphire">Meeting request</p>
-        <p className="mt-0.5 text-sm font-semibold text-primary">{String(card?.title ?? 'Proposed meeting')}</p>
-        <p className="tnum mt-0.5 text-xs text-secondary">
-          {String(card?.proposed ?? 'TBC')}{card?.durationMins != null ? ` · ${String(card.durationMins)} min` : ''}
+        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-sapphire">
+          🎥 {isScheduled ? 'Teams meeting scheduled' : 'Meeting request'}
         </p>
-        <div className="mt-2 flex gap-2">
-          <button
-            type="button"
-            onClick={onMeetingAccept}
-            disabled={!onMeetingAccept}
-            className="rounded-lg px-2.5 py-1 text-xs font-semibold text-on-accent bg-sapphire/90 hover:brightness-110 disabled:opacity-50"
-          >
-            Accept
-          </button>
-          <button
-            type="button"
-            onClick={onMeetingReschedule}
-            disabled={!onMeetingReschedule}
-            className="rounded-lg px-2.5 py-1 text-xs font-semibold text-secondary ring-1 ring-white/20 hover:bg-white/10 disabled:opacity-50"
-          >
-            Reschedule
-          </button>
-        </div>
+        <p className="mt-0.5 text-sm font-semibold text-primary">{title}</p>
+        <p className="tnum mt-0.5 text-xs text-secondary">
+          {when}{card?.durationMins != null ? ` · ${String(card.durationMins)} min` : ''}
+        </p>
+
+        {isScheduled ? (
+          <>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {joinUrl && (
+                <a href={joinUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-sapphire/90 px-2.5 py-1 text-xs font-semibold text-on-accent hover:brightness-110">
+                  Join Teams Meeting ↗
+                </a>
+              )}
+              <button type="button" onClick={addToCalendar} className="rounded-lg px-2.5 py-1 text-xs font-semibold text-secondary ring-1 ring-white/20 hover:bg-white/10">
+                Add to Calendar
+              </button>
+            </div>
+            {attendees.length > 0 && (
+              <p className="mt-2 border-t border-white/10 pt-1.5 text-[11px] text-muted">Attendees: {attendees.join(', ')}</p>
+            )}
+          </>
+        ) : (
+          <div className="mt-2 flex gap-2">
+            <button type="button" onClick={onMeetingAccept} disabled={!onMeetingAccept} className="rounded-lg bg-sapphire/90 px-2.5 py-1 text-xs font-semibold text-on-accent hover:brightness-110 disabled:opacity-50">Accept</button>
+            <button type="button" onClick={onMeetingReschedule} disabled={!onMeetingReschedule} className="rounded-lg px-2.5 py-1 text-xs font-semibold text-secondary ring-1 ring-white/20 hover:bg-white/10 disabled:opacity-50">Reschedule</button>
+          </div>
+        )}
       </div>
     );
   }

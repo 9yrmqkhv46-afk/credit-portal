@@ -26,7 +26,7 @@ export type DebtType = 'HOME_LOAN' | 'PERSONAL_LOAN' | 'CAR_LOAN' | 'CREDIT_CARD
 export type PropertyType = 'OWNER_OCCUPIED' | 'INVESTMENT' | 'RENTAL';
 export type LoanPurpose = 'PURCHASE' | 'REFINANCE' | 'INVESTMENT' | 'CONSTRUCTION' | 'EQUITY_RELEASE';
 export type RepaymentType = 'PI' | 'IO';
-export type ClientStatus = 'Prospect' | 'Active' | 'Inactive';
+export type ClientStatus = 'Prospect' | 'Active' | 'Inactive' | 'Archived';
 
 export interface ClientProfile {
   id: string;

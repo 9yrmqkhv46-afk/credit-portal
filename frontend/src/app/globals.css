@@ -606,3 +606,32 @@ h1, h2, h3, h4 {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-14px); }
 }
+
+
+/* ===========================================================================
+ * Mandate 5 — Section A, Layer 6: drifting blueprint grid.
+ * Rendered as a body::before overlay above the wallpaper canvas (z 0) but
+ * below all page content. Barely-perceptible diagonal drift keeps the portal
+ * feeling alive even when nothing is happening.
+ * ======================================================================== */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0, 196, 212, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 196, 212, 0.022) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: gridDrift 60s linear infinite;
+}
+
+@keyframes gridDrift {
+  0% { background-position: 0 0; }
+  100% { background-position: 48px 48px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none !important; }
+}

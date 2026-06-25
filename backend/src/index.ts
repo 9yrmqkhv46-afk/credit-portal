@@ -10,6 +10,7 @@ import servicingRoutes from './routes/servicing';
 import valuationRoutes from './routes/valuation';
 import timelineRoutes from './routes/timeline';
 import messageRoutes from './routes/messages';
+import meetingRoutes, { microsoftAuthRouter } from './routes/meetings';
 import { ensureSeedData } from './lib/bootstrap';
 
 const app = express();
@@ -107,6 +108,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/valuation', valuationRoutes);
 app.use('/api/timeline', timelineRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/meetings', meetingRoutes);
+// Microsoft OAuth redirect flow (public, browser-driven; not under /api).
+app.use('/auth', microsoftAuthRouter);
 
 // Health check
 app.get('/api/health', (_req, res) => {

@@ -167,7 +167,7 @@ router.post('/clients/:id/notes', async (req: AuthRequest, res: Response): Promi
 });
 
 const statusSchema = z.object({
-  status: z.enum(['Prospect', 'Active', 'Inactive']),
+  status: z.enum(['Prospect', 'Active', 'Inactive', 'Archived']),
 });
 
 // PATCH /api/admin/clients/:id/status - update client status

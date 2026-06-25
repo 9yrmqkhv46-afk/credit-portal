@@ -4,6 +4,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Message, MessageType, SenderRole } from '@/types';
 import { MessageCard } from './MessageCard';
 
+interface ReplyTarget {
+  id: string;
+  author: string;
+  text: string;
+}
+
 interface Props {
   messages: Message[];
   /** The role of the person using this thread (determines outgoing side). */
@@ -20,12 +26,37 @@ interface Props {
   onReact?: (messageId: string, reactions: string[]) => void;
   onResolve?: (messageId: string, resolved: boolean) => void;
   onFlag?: (messageId: string, flagged: boolean) => void;
+  /** Opens the Schedule Teams Meeting modal (owned by the page). */
+  onScheduleMeeting?: () => void;
 }
 
 const REACTIONS = ['👍', '✅', '❓', '🏠', '📋'];
 
-/** Max attachment size — base64 inflates by ~33%, keep under the 12mb API limit. */
-const MAX_ATTACHMENT_BYTES = 7 * 1024 * 1024;
+/** Mandate 5 §C — 10 MB attachment limit + allowed MIME types. */
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_TYPES = [
+  'application/pdf',
+  'image/jpeg', 'image/png', 'image/webp', 'image/heic',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',       // .xlsx
+  'application/msword',
+  'application/vnd.ms-excel',
+  'text/csv',
+];
+
+/** Just the time portion in AEST, e.g. "3:42 PM AEST". */
+function fmtAESTTime(date: Date): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-AU', {
+      timeZone: 'Australia/Sydney',
+      hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short',
+    }).formatToParts(date);
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+    return `${get('hour')}:${get('minute')} ${(get('dayPeriod') || '').toUpperCase()} ${get('timeZoneName') || 'AEST'}`;
+  } catch {
+    return date.toLocaleTimeString();
+  }
+}
 
 function dayLabel(date: Date): string {
   const today = new Date();
@@ -38,11 +69,10 @@ function dayLabel(date: Date): string {
 }
 
 function Ticks({ status }: { status: Message['status'] }) {
-  // single (sent) / double (delivered) / teal double (read)
   const teal = status === 'read';
   const dbl = status === 'delivered' || status === 'read';
   return (
-    <span className={`ml-1 inline-flex ${teal ? 'text-brand' : 'text-muted'}`} aria-label={`Status: ${status}`}>
+    <span className={`ml-1 inline-flex transition-colors duration-200 ${teal ? 'text-brand' : 'text-muted'}`} aria-label={`Status: ${status}`}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
         <path d="M3 13l4 4L15 7" strokeLinecap="round" strokeLinejoin="round" />
         {dbl && <path d="M9 13l4 4L21 7" strokeLinecap="round" strokeLinejoin="round" />}
@@ -53,34 +83,56 @@ function Ticks({ status }: { status: Message['status'] }) {
 
 export function MessageThread({
   messages, viewerRole, headerTitle, headerSubtitle, stageLabel, stageHref,
-  admin = false, live = false, onSend, onReact, onResolve, onFlag,
+  admin = false, live = false, onSend, onReact, onResolve, onFlag, onScheduleMeeting,
 }: Props) {
   const [draft, setDraft] = useState('');
   const [showAttach, setShowAttach] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
   const [reactingId, setReactingId] = useState<string | null>(null);
   const [typing, setTyping] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
+  const [lightbox, setLightbox] = useState<{ src: string; name: string } | null>(null);
+  const [, setTick] = useState(0); // drives read-receipt re-render at transitions
+
   const feedRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const didInitialScroll = useRef(false);
 
   const ordered = useMemo(
     () => [...messages].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     [messages]
   );
 
+  // Always start scrolled to the bottom; jump instantly on first render, then
+  // smooth-scroll as new messages arrive.
   useEffect(() => {
     const el = feedRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    if (!el) return;
+    if (!didInitialScroll.current) {
+      el.scrollTop = el.scrollHeight;
+      didInitialScroll.current = true;
+    } else {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }
   }, [ordered.length, typing]);
 
-  // Auto-dismiss the transient inline note (used by header call/profile buttons).
   useEffect(() => {
     if (!note) return;
     const t = window.setTimeout(() => setNote(null), 2600);
     return () => window.clearTimeout(t);
   }, [note]);
+
+  // Close lightbox on Escape.
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightbox(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightbox]);
 
   const autosize = () => {
     const ta = taRef.current;
@@ -92,16 +144,21 @@ export function MessageThread({
   const send = (payload: { body?: string; type: MessageType; cardData?: unknown }) => {
     onSend(payload);
     setDraft('');
+    setReplyTo(null);
     if (taRef.current) taRef.current.style.height = 'auto';
-    // Tasteful: show a brief typing indicator from the other side.
+    // Read-receipt progression: nudge re-render at the sent→delivered→read points.
+    window.setTimeout(() => setTick((x) => x + 1), 850);
+    window.setTimeout(() => setTick((x) => x + 1), 2050);
+    // Simulate the other party typing back (random 1.5–4s) then a reply arrives.
     setTyping(true);
-    window.setTimeout(() => setTyping(false), 1600);
+    window.setTimeout(() => setTyping(false), 1500 + Math.random() * 2500);
   };
 
   const sendText = () => {
     const body = draft.trim();
     if (!body) return;
-    send({ body, type: 'text' });
+    const cardData = replyTo ? { quotedAuthor: replyTo.author, quotedText: replyTo.text } : undefined;
+    send({ body, type: 'text', cardData });
   };
 
   const attach = (type: MessageType) => {
@@ -109,30 +166,32 @@ export function MessageThread({
     const samples: Record<string, { body: string; cardData: unknown }> = {
       document_request: { body: 'Documents required', cardData: { title: 'Documents required', items: ['Last 2 payslips', 'Bank statement', 'Photo ID'] } },
       borrowing_summary: { body: 'Borrowing summary', cardData: { maxBorrowing: 920000, rate: 6.49, termYears: 30, monthlyRepayment: 5805 } },
-      meeting_request: { body: 'Meeting request', cardData: { title: 'Quick catch-up call', proposed: 'Thu 2:30pm', durationMins: 15 } },
       stage_update: { body: 'Status update', cardData: { stage: 'Unconditional Pre-Approval Received', group: 'Pre-Approval', order: 6, total: 18 } },
     };
     const s = samples[type];
-    send({ body: s.body, type, cardData: s.cardData });
+    if (s) send({ body: s.body, type, cardData: s.cardData });
   };
 
-  /** Open the OS file picker for a real attachment upload. */
   const pickFile = () => {
     setShowAttach(false);
+    setAttachError(null);
     fileRef.current?.click();
   };
 
-  /** Read the chosen file as a base64 data URL and send it as an attachment. */
-  const onFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    // Reset so picking the same file again re-fires change.
-    e.target.value = '';
-    if (!file) return;
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      setNote(`"${file.name}" is too large (max 7 MB).`);
-      return;
-    }
+  const validateFile = (file: File): string | null => {
+    const okType = ALLOWED_TYPES.includes(file.type) ||
+      /\.(pdf|jpe?g|png|webp|heic|docx?|xlsx?|csv)$/i.test(file.name);
+    if (!okType) return 'Only PDF, DOCX, XLSX, images and CSV files are supported.';
+    if (file.size > MAX_ATTACHMENT_BYTES) return 'This file exceeds the 10 MB limit. Please compress it and try again.';
+    return null;
+  };
+
+  const handleFile = async (file: File) => {
+    const err = validateFile(file);
+    if (err) { setAttachError(err); return; }
+    setAttachError(null);
     setUploading(true);
+    setShowAttach(false);
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -152,13 +211,32 @@ export function MessageThread({
     }
   };
 
-  /** Toggle a reaction on a message and emit the FULL resulting array. */
+  const onFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) handleFile(file);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  };
+
   const toggleReaction = (m: Message, emoji: string) => {
     let current: string[] = [];
     try { current = m.reactions ? JSON.parse(m.reactions) : []; } catch { current = []; }
     const next = current.includes(emoji) ? current.filter((r) => r !== emoji) : [...current, emoji];
     onReact?.(m.id, next);
     setReactingId(null);
+  };
+
+  const startReply = (m: Message) => {
+    const author = m.senderRole === 'ADMIN' ? 'TransformBiz' : m.senderRole === 'CLIENT' ? (admin ? headerTitle : 'You') : 'System';
+    const text = (m.body || (m.type !== 'text' ? m.type.replace('_', ' ') : '')).slice(0, 140);
+    setReplyTo({ id: m.id, author, text });
+    taRef.current?.focus();
   };
 
   const headerAction = (kind: string) => {
@@ -171,6 +249,15 @@ export function MessageThread({
     setNote(labels[kind] ?? null);
   };
 
+  /** Read-receipt status: prefer server 'read', otherwise derive from age. */
+  const deriveStatus = (m: Message): Message['status'] => {
+    if (m.status === 'read') return 'read';
+    const age = Date.now() - new Date(m.createdAt).getTime();
+    if (age < 800) return 'sent';
+    if (age < 2000) return 'delivered';
+    return 'read';
+  };
+
   const lastIncoming = ordered.length > 0 && ordered[ordered.length - 1].senderRole !== viewerRole && ordered[ordered.length - 1].senderRole !== 'SYSTEM';
   const quickReplies = viewerRole === 'CLIENT'
     ? ['Thanks!', 'Got it 👍', 'When is settlement?']
@@ -180,7 +267,7 @@ export function MessageThread({
   let prevSender: string | null = null;
 
   return (
-    <div className="glass-2 flex h-[calc(100vh-12rem)] min-h-[420px] flex-col overflow-hidden rounded-2xl">
+    <div className="glass-2 relative flex h-[calc(100vh-12rem)] min-h-[420px] flex-col overflow-hidden rounded-2xl">
       {/* Sticky header */}
       <div className="glass-3 flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
         <div className="flex items-center gap-3">
@@ -213,7 +300,6 @@ export function MessageThread({
         </div>
       </div>
 
-      {/* Transient inline note (call/profile actions, upload errors) */}
       {note && (
         <div className="bubble-in border-b border-white/10 bg-brand-light/60 px-4 py-2 text-center text-xs font-medium text-brand">
           {note}
@@ -232,6 +318,10 @@ export function MessageThread({
           const showSender = !isSystem && m.senderRole !== prevSender;
           prevSender = m.senderRole;
           const reactions: string[] = (() => { try { return m.reactions ? JSON.parse(m.reactions) : []; } catch { return []; } })();
+          const quoted: { quotedAuthor?: string; quotedText?: string } | null = (() => {
+            if (m.type !== 'text' || !m.cardData) return null;
+            try { return JSON.parse(m.cardData); } catch { return null; }
+          })();
 
           return (
             <React.Fragment key={m.id}>
@@ -263,51 +353,53 @@ export function MessageThread({
                           : 'glass-2 rounded-[18px_18px_18px_4px] text-primary',
                       ].join(' ')}
                     >
+                      {quoted?.quotedText && (
+                        <div className="mb-1.5 rounded-lg border-l-2 border-brand/60 bg-black/20 px-2 py-1">
+                          <p className="text-[11px] font-semibold text-brand">{quoted.quotedAuthor}</p>
+                          <p className="line-clamp-2 text-[11px] text-secondary">{quoted.quotedText}</p>
+                        </div>
+                      )}
                       {m.type !== 'text'
                         ? <MessageCard
                             message={m}
                             onUpload={pickFile}
+                            onImageClick={(src, name) => setLightbox({ src, name })}
                             onMeetingAccept={() => send({ body: 'Sounds good — that time works for me. ✅', type: 'text' })}
                             onMeetingReschedule={() => { setDraft('Could we find another time? I was thinking…'); taRef.current?.focus(); }}
                           />
-                        : <p className="whitespace-pre-wrap break-words">{m.body}</p>}
+                        : m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
                       <div className="mt-1 flex items-center justify-end gap-1">
                         <span className="tnum text-[10px] text-muted opacity-0 transition-opacity group-hover:opacity-100">
-                          {created.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                          {fmtAESTTime(created)}
                         </span>
-                        {isOutgoing && admin && <Ticks status={m.status} />}
-                        {isOutgoing && !admin && viewerRole === 'CLIENT' && <Ticks status={m.status} />}
+                        {isOutgoing && <Ticks status={deriveStatus(m)} />}
                       </div>
                     </div>
 
-                    {/* Reaction button (always available on hover) */}
-                    <button
-                      type="button"
-                      aria-label="React"
-                      onClick={() => setReactingId(reactingId === m.id ? null : m.id)}
-                      className={`absolute top-1 ${isOutgoing ? '-left-7' : '-right-7'} rounded-full bg-white/8 p-1 text-muted opacity-0 ring-1 ring-white/12 transition-opacity hover:text-primary group-hover:opacity-100`}
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9" /><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" strokeLinecap="round" />
-                      </svg>
-                    </button>
+                    {/* Hover action buttons: reply + react */}
+                    <div className={`absolute top-1 ${isOutgoing ? '-left-14' : '-right-14'} flex gap-1 opacity-0 transition-opacity group-hover:opacity-100`}>
+                      <button type="button" aria-label="Reply" onClick={() => startReply(m)} className="rounded-full bg-white/8 p-1 text-muted ring-1 ring-white/12 hover:text-primary">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                          <path d="M9 17l-5-5 5-5M4 12h11a5 5 0 015 5v1" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                      <button type="button" aria-label="React" onClick={() => setReactingId(reactingId === m.id ? null : m.id)} className="rounded-full bg-white/8 p-1 text-muted ring-1 ring-white/12 hover:text-primary">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                          <circle cx="12" cy="12" r="9" /><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" strokeLinecap="round" />
+                        </svg>
+                      </button>
+                    </div>
 
                     {reactions.length > 0 && (
                       <div className={`mt-0.5 flex gap-1 ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
                         {reactions.map((r, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => toggleReaction(m, r)}
-                            className="rounded-full bg-white/10 px-1.5 text-xs ring-1 ring-white/15 transition hover:bg-white/20"
-                          >
+                          <button key={i} type="button" onClick={() => toggleReaction(m, r)} className="rounded-full bg-white/10 px-1.5 text-xs ring-1 ring-white/15 transition hover:bg-white/20">
                             {r}
                           </button>
                         ))}
                       </div>
                     )}
 
-                    {/* Admin resolve / flag */}
                     {admin && !isOutgoing && (
                       <div className="mt-0.5 flex gap-2">
                         <button type="button" onClick={() => onResolve?.(m.id, !m.resolved)} className={`text-[11px] font-medium ${m.resolved ? 'text-emerald underline' : 'text-muted hover:text-emerald'}`}>
@@ -322,7 +414,7 @@ export function MessageThread({
                     {reactingId === m.id && (
                       <div className={`absolute z-20 mt-1 flex gap-1 rounded-full glass-4 px-2 py-1 ${isOutgoing ? 'right-0' : 'left-0'}`}>
                         {REACTIONS.map((r) => (
-                          <button key={r} type="button" onClick={() => toggleReaction(m, r)} className="text-base hover:scale-125 transition-transform">
+                          <button key={r} type="button" onClick={() => toggleReaction(m, r)} className="text-base transition-transform hover:scale-125">
                             {r}
                           </button>
                         ))}
@@ -346,52 +438,73 @@ export function MessageThread({
         )}
       </div>
 
-      {/* Quick replies */}
+      {/* Quick replies — INSERT into composer (do not auto-send) */}
       {lastIncoming && (
         <div className="flex gap-2 overflow-x-auto border-t border-white/10 px-4 py-2">
           {quickReplies.map((q) => (
-            <button key={q} type="button" onClick={() => send({ body: q, type: 'text' })} className="whitespace-nowrap rounded-full bg-white/8 px-3 py-1 text-xs text-secondary ring-1 ring-white/15 hover:bg-white/12 hover:text-primary">
+            <button
+              key={q}
+              type="button"
+              onClick={() => { setDraft((d) => (d ? `${d} ${q}` : q)); taRef.current?.focus(); setTimeout(autosize, 0); }}
+              className="whitespace-nowrap rounded-full bg-white/8 px-3 py-1 text-xs text-secondary ring-1 ring-white/15 hover:bg-white/12 hover:text-primary"
+            >
               {q}
             </button>
           ))}
         </div>
       )}
 
+      {/* Reply preview */}
+      {replyTo && (
+        <div className="flex items-center justify-between gap-2 border-t border-white/10 bg-white/4 px-4 py-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-brand">Replying to {replyTo.author}</p>
+            <p className="truncate text-xs text-secondary">{replyTo.text}</p>
+          </div>
+          <button type="button" aria-label="Cancel reply" onClick={() => setReplyTo(null)} className="rounded-md px-1.5 text-muted hover:text-primary">×</button>
+        </div>
+      )}
+
+      {/* Attach panel (rises above composer) */}
+      {showAttach && (
+        <div className="glass-4 absolute bottom-[76px] left-3 right-3 z-30 rounded-2xl p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold text-primary">Attach a file</p>
+            <button type="button" aria-label="Close" onClick={() => { setShowAttach(false); setAttachError(null); }} className="rounded-md px-1.5 text-muted hover:text-primary">×</button>
+          </div>
+          <div
+            onClick={pickFile}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            className={`cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition ${
+              dragOver ? 'border-brand bg-brand-light/60 shadow-[0_0_24px_-4px_var(--accent-teal)]' : 'border-white/20 hover:border-brand/60'
+            }`}
+          >
+            <p className="text-sm font-medium text-secondary">Drag &amp; drop files here, or click to browse</p>
+            <p className="mt-1 text-xs text-muted">PDF · DOCX · XLSX · JPG · PNG · CSV — max 10 MB</p>
+          </div>
+          {attachError && <p className="mt-2 text-xs font-medium text-crimson">{attachError}</p>}
+          <div className="my-3 flex items-center gap-2 text-[11px] uppercase tracking-wide text-faint">
+            <span className="h-px flex-1 bg-white/10" />Or choose a quick attachment<span className="h-px flex-1 bg-white/10" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => attach('borrowing_summary')} className="rounded-lg bg-white/6 px-3 py-2 text-left text-sm text-secondary ring-1 ring-white/12 hover:bg-white/10 hover:text-primary">📊 Borrowing Summary</button>
+            <button type="button" onClick={() => attach('document_request')} className="rounded-lg bg-white/6 px-3 py-2 text-left text-sm text-secondary ring-1 ring-white/12 hover:bg-white/10 hover:text-primary">📋 Document Checklist</button>
+            <button type="button" onClick={() => attach('stage_update')} className="rounded-lg bg-white/6 px-3 py-2 text-left text-sm text-secondary ring-1 ring-white/12 hover:bg-white/10 hover:text-primary">🏠 Status Update</button>
+            <button type="button" onClick={() => { setShowAttach(false); onScheduleMeeting?.(); }} className="rounded-lg bg-white/6 px-3 py-2 text-left text-sm text-secondary ring-1 ring-white/12 hover:bg-white/10 hover:text-primary disabled:opacity-50" disabled={!onScheduleMeeting}>📅 Meeting Invite</button>
+          </div>
+        </div>
+      )}
+
       {/* Composer */}
       <div className="glass-3 relative border-t border-white/10 p-3">
-        {showAttach && (
-          <div className="absolute bottom-16 left-3 z-20 w-56 rounded-xl glass-4 p-2">
-            <button type="button" onClick={pickFile} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-secondary hover:bg-white/10 hover:text-primary">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" strokeLinecap="round" />
-              </svg>
-              Upload file / photo
-            </button>
-            <div className="my-1 border-t border-white/10" />
-            {([
-              ['document_request', 'Document request'],
-              ['borrowing_summary', 'Borrowing summary'],
-              ['meeting_request', 'Meeting request'],
-              ['stage_update', 'Status update'],
-            ] as [MessageType, string][]).map(([type, label], i) => (
-              <button key={i} type="button" onClick={() => attach(type)} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-secondary hover:bg-white/10 hover:text-primary">
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
-          className="hidden"
-          onChange={onFileChosen}
-        />
+        <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.doc,.docx,.xls,.xlsx,.csv,image/*,application/pdf" className="hidden" onChange={onFileChosen} />
         <div className="flex items-end gap-2">
           <button
             type="button"
             aria-label="Attach"
-            onClick={() => setShowAttach((s) => !s)}
+            onClick={() => { setShowAttach((s) => !s); setAttachError(null); }}
             disabled={uploading}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-secondary ring-1 ring-white/15 hover:bg-white/10 hover:text-primary disabled:opacity-50"
           >
@@ -426,6 +539,23 @@ export function MessageThread({
           </button>
         </div>
       </div>
+
+      {/* Image lightbox */}
+      {lightbox && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-6 backdrop-blur-sm" onClick={() => setLightbox(null)}>
+          <div className="glass-5 relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-2xl p-3" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={lightbox.src} alt={lightbox.name} className="max-h-[78vh] max-w-full rounded-lg object-contain" />
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <span className="truncate text-sm text-secondary">{lightbox.name}</span>
+              <div className="flex gap-2">
+                <a href={lightbox.src} download={lightbox.name} className="rounded-lg bg-brand px-3 py-1 text-xs font-semibold text-on-accent hover:brightness-110">Download</a>
+                <button type="button" onClick={() => setLightbox(null)} className="rounded-lg px-3 py-1 text-xs font-semibold text-secondary ring-1 ring-white/20 hover:bg-white/10">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
