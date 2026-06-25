@@ -672,9 +672,10 @@ body::before {
  * ======================================================================== */
 select {
   color: var(--text-primary);
+  color-scheme: dark;
 }
 select option,
 select optgroup {
-  background-color: #141d31;
-  color: #f0f5ff;
+  background-color: #141d31 !important;
+  color: #f0f5ff !important;
 }

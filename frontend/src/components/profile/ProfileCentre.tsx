@@ -122,6 +122,16 @@ export function ProfileCentre() {
   const [docs, setDocs] = useState<{ label: string; provided: boolean }[]>(DEFAULT_DOCS.map((label) => ({ label, provided: false })));
   const [initialDocs, setInitialDocs] = useState(docs);
 
+  // Spouse / partner (Co-Borrower / Borrower 2) — shown when married / de facto.
+  const SPOUSE_BLANK: Form = {
+    relationshipToBorrower1: 'Spouse', borrowerType: 'Applicant', title: '', firstName: '', middleName: '', lastName: '',
+    dateOfBirth: '', mobilePhone: '', email: '', currentAddress: '',
+    driverLicenceNumber: '', passportNumber: '', countryOfCitizenship: '', residencyStatus: '',
+  };
+  const [cb, setCb] = useState<Form>(SPOUSE_BLANK);
+  const [cbInitial, setCbInitial] = useState<Form>(SPOUSE_BLANK);
+  const setC = (k: string, v: string | boolean) => setCb((f) => ({ ...f, [k]: v }));
+
   useEffect(() => {
     (async () => {
       try {
@@ -148,6 +158,20 @@ export function ProfileCentre() {
           }
         }
       } catch { /* no profile yet */ }
+      try {
+        const res = await api.get('/client/co-borrower');
+        const c = res.data?.coBorrower;
+        if (c) {
+          const next: Form = {
+            relationshipToBorrower1: c.relationshipToBorrower1 || 'Spouse', borrowerType: c.borrowerType || 'Applicant',
+            title: c.title || '', firstName: c.firstName || '', middleName: c.middleName || '', lastName: c.lastName || '',
+            dateOfBirth: c.dateOfBirth ? c.dateOfBirth.split('T')[0] : '', mobilePhone: c.mobilePhone || '', email: c.email || '',
+            currentAddress: c.currentAddress || '', driverLicenceNumber: c.driverLicenceNumber || '', passportNumber: c.passportNumber || '',
+            countryOfCitizenship: c.countryOfCitizenship || '', residencyStatus: c.residencyStatus || '',
+          };
+          setCb(next); setCbInitial(next);
+        }
+      } catch { /* none */ }
     })();
   }, []);
 
@@ -158,7 +182,11 @@ export function ProfileCentre() {
     employment: ['employmentStatus', 'employerName', 'jobTitle', 'employmentStartDate', 'annualIncome'],
   };
 
-  const dirtyPersonal = useMemo(() => sectionKeys.personal.some((k) => form[k] !== initial[k]), [form, initial]);
+  const isPartnered = form.maritalStatus === 'MARRIED' || form.maritalStatus === 'DE_FACTO';
+  const dirtyPersonal = useMemo(
+    () => sectionKeys.personal.some((k) => form[k] !== initial[k]) || (isPartnered && JSON.stringify(cb) !== JSON.stringify(cbInitial)),
+    [form, initial, isPartnered, cb, cbInitial]
+  );
   const dirtyEmployment = useMemo(() => sectionKeys.employment.some((k) => form[k] !== initial[k]), [form, initial]);
   const dirtyDocs = useMemo(() => JSON.stringify(docs) !== JSON.stringify(initialDocs), [docs, initialDocs]);
 
@@ -195,7 +223,20 @@ export function ProfileCentre() {
       mailingAddress: form.sameAsResidential ? null : (form.mailingAddress || null),
       sameAsResidential: form.sameAsResidential,
     };
-    if (await persist(payload, 'personal')) setInitial((p) => ({ ...p, ...Object.fromEntries(sectionKeys.personal.map((k) => [k, form[k]])) }));
+    if (await persist(payload, 'personal')) {
+      setInitial((p) => ({ ...p, ...Object.fromEntries(sectionKeys.personal.map((k) => [k, form[k]])) }));
+      // When married / de facto, also persist the spouse (co-borrower) record.
+      if (isPartnered) {
+        const cbPayload: Record<string, unknown> = {};
+        Object.keys(cb).forEach((k) => { const v = cb[k]; cbPayload[k] = typeof v === 'boolean' ? v : (v === '' ? null : v); });
+        try {
+          await api.put('/client/co-borrower', cbPayload);
+          setCbInitial(cb);
+        } catch {
+          toast('Spouse details could not be saved', { accent: 'crimson' });
+        }
+      }
+    }
   };
 
   const saveEmployment = async () => {
@@ -235,6 +276,38 @@ export function ProfileCentre() {
         </label>
         {!form.sameAsResidential && (
           <Input label="Mailing Address" value={form.mailingAddress as string} onChange={(e) => set('mailingAddress', e.target.value)} />
+        )}
+
+        {/* Spouse / partner pops down when married or de facto. */}
+        {isPartnered && (
+          <div className="animate-enter mt-2 rounded-2xl border border-brand/25 bg-brand-light/40 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand/20 text-brand">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 11a4 4 0 10-4-4 4 4 0 004 4zm-8 1a3.5 3.5 0 10-3.5-3.5A3.5 3.5 0 008 12zm0 2c-3 0-6 1.6-6 4v2h8v-2c0-1 .4-1.9 1-2.7A9.6 9.6 0 008 14zm8 0c-3.3 0-7 1.7-7 4.3V20h14v-1.7c0-2.6-3.7-4.3-7-4.3z" /></svg>
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-primary">Spouse / Partner Details (Borrower 2)</p>
+                <p className="text-xs text-muted">Saved with your personal information.</p>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Select label="Relationship" options={[{ value: 'Spouse', label: 'Spouse' }, { value: 'De Facto', label: 'De Facto' }, { value: 'Partner', label: 'Partner' }]} value={cb.relationshipToBorrower1 as string} onChange={(e) => setC('relationshipToBorrower1', e.target.value)} />
+              <Select label="Title" options={[{ value: '', label: '—' }, { value: 'Mr', label: 'Mr' }, { value: 'Mrs', label: 'Mrs' }, { value: 'Ms', label: 'Ms' }, { value: 'Miss', label: 'Miss' }, { value: 'Dr', label: 'Dr' }]} value={cb.title as string} onChange={(e) => setC('title', e.target.value)} />
+              <Select label="Borrower Type" options={[{ value: 'Applicant', label: 'Applicant' }, { value: 'Guarantor', label: 'Guarantor' }]} value={cb.borrowerType as string} onChange={(e) => setC('borrowerType', e.target.value)} />
+              <Input label="First Name" value={cb.firstName as string} onChange={(e) => setC('firstName', e.target.value)} />
+              <Input label="Middle Name" value={cb.middleName as string} onChange={(e) => setC('middleName', e.target.value)} />
+              <Input label="Last Name" value={cb.lastName as string} onChange={(e) => setC('lastName', e.target.value)} />
+              <Input label="Date of Birth" type="date" value={cb.dateOfBirth as string} onChange={(e) => setC('dateOfBirth', e.target.value)} />
+              <Input label="Mobile" type="tel" placeholder="+61 4XX XXX XXX" value={cb.mobilePhone as string} onChange={(e) => setC('mobilePhone', e.target.value)} />
+              <Input label="Email" type="email" value={cb.email as string} onChange={(e) => setC('email', e.target.value)} />
+              <Select label="Residency Status" options={RESIDENCY_OPTIONS} value={cb.residencyStatus as string} onChange={(e) => setC('residencyStatus', e.target.value)} />
+              <Input label="Country of Citizenship" value={cb.countryOfCitizenship as string} onChange={(e) => setC('countryOfCitizenship', e.target.value)} />
+              <Input label="Residential Address" className="md:col-span-3" value={cb.currentAddress as string} onChange={(e) => setC('currentAddress', e.target.value)} />
+              <Input label="Driver Licence Number" value={cb.driverLicenceNumber as string} onChange={(e) => setC('driverLicenceNumber', e.target.value)} />
+              <Input label="Passport Number" value={cb.passportNumber as string} onChange={(e) => setC('passportNumber', e.target.value)} />
+            </div>
+            <p className="mt-2 text-xs text-muted">Further co-borrower details (address history, credit history) are in the Detailed Assessment below.</p>
+          </div>
         )}
       </Section>
 
