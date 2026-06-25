@@ -42,13 +42,29 @@ export default function LandingPage() {
   const [dependants, setDependants] = useState(0);
   const [debts, setDebts] = useState(800);
   const [leaving, setLeaving] = useState(false);
+  const [statsIn, setStatsIn] = useState(false);
   const watermarkRef = useRef<HTMLDivElement>(null);
 
   const borrowing = useMemo(() => estimateBorrowing(income, dependants, debts), [income, dependants, debts]);
 
+  // Time-of-day greeting (Mandate 5 — Section F).
+  const greeting = useMemo(() => {
+    const h = new Date().getHours();
+    if (h >= 5 && h < 12) return 'Good morning';
+    if (h >= 12 && h < 18) return 'Good afternoon';
+    if (h >= 18 && h < 24) return 'Good evening';
+    return 'Welcome';
+  }, []);
+
   // Slide the nav in after 600ms.
   useEffect(() => {
     const t = window.setTimeout(() => setNavIn(true), 600);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  // Trigger the social-proof stat count-up shortly after load.
+  useEffect(() => {
+    const t = window.setTimeout(() => setStatsIn(true), 400);
     return () => window.clearTimeout(t);
   }, []);
 
@@ -136,7 +152,15 @@ export default function LandingPage() {
       </div>
 
       {/* Hero */}
-      <main className="relative z-10 flex min-h-screen items-center justify-center px-4 py-20">
+      <main className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 py-20">
+        {/* Time-aware greeting */}
+        <div className="mb-6 max-w-[560px] text-center" style={{ filter: 'blur(0.3px)' }}>
+          <h2 className="font-display text-2xl font-bold tracking-tight text-primary sm:text-3xl">
+            {greeting}, and welcome to TransformBiz.
+          </h2>
+          <p className="mt-1 text-sm text-secondary sm:text-base">Australia&rsquo;s most advanced lending portal.</p>
+        </div>
+
         <div
           className="glass-5 w-full max-w-[560px] rounded-3xl p-7 sm:p-9 transition-all duration-500"
           style={{
@@ -214,6 +238,28 @@ export default function LandingPage() {
             Get Full Assessment
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
+        </div>
+
+        {/* Social proof stats (count up on load) */}
+        <div
+          className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-4 text-center transition-opacity duration-700"
+          style={{ opacity: statsIn ? 1 : 0 }}
+        >
+          {[
+            { value: 2.4, prefix: '$', suffix: 'B+', decimals: 1, label: 'Loans Settled' },
+            { value: 1200, prefix: '', suffix: '+', decimals: 0, label: 'Clients Served' },
+            { value: 98.6, prefix: '', suffix: '%', decimals: 1, label: 'Approval Rate' },
+          ].map((s, i) => (
+            <React.Fragment key={s.label}>
+              {i > 0 && <span aria-hidden="true" className="hidden h-10 w-px bg-white/12 sm:block" />}
+              <div>
+                <p className="tnum font-display text-3xl font-bold sm:text-4xl" style={{ color: 'var(--accent-teal)' }}>
+                  <AnimatedNumber value={statsIn ? s.value : 0} prefix={s.prefix} suffix={s.suffix} decimals={s.decimals} durationMs={1100} />
+                </p>
+                <p className="mt-1 text-xs font-medium uppercase tracking-wider text-muted">{s.label}</p>
+              </div>
+            </React.Fragment>
+          ))}
         </div>
       </main>
     </div>

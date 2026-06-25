@@ -35,6 +35,10 @@ router.get('/clients', async (_req: AuthRequest, res: Response): Promise<void> =
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
       },
     });
 
@@ -45,6 +49,7 @@ router.get('/clients', async (_req: AuthRequest, res: Response): Promise<void> =
       status: client.clientProfile?.status || 'Prospect',
       createdAt: client.createdAt,
       latestScenario: client.loanScenarios[0] || null,
+      lastMessageAt: client.messages[0]?.createdAt || null,
     }));
 
     res.json({ clients: clientList });
@@ -167,7 +172,7 @@ router.post('/clients/:id/notes', async (req: AuthRequest, res: Response): Promi
 });
 
 const statusSchema = z.object({
-  status: z.enum(['Prospect', 'Active', 'Inactive']),
+  status: z.enum(['Prospect', 'Active', 'Inactive', 'Archived']),
 });
 
 // PATCH /api/admin/clients/:id/status - update client status
@@ -380,7 +385,7 @@ function serialiseJson(v: unknown): string | null {
   try { return JSON.stringify(v); } catch { return null; }
 }
 
-const MESSAGE_TYPES = ['text', 'stage_update', 'document_request', 'borrowing_summary', 'meeting_request'] as const;
+const MESSAGE_TYPES = ['text', 'stage_update', 'document_request', 'borrowing_summary', 'meeting_request', 'attachment'] as const;
 
 const adminSendSchema = z.object({
   body: z.string().nullable().optional(),
@@ -442,6 +447,7 @@ const adminMessagePatchSchema = z.object({
   status: z.enum(['sent', 'delivered', 'read']).optional(),
   resolved: z.boolean().optional(),
   flagged: z.boolean().optional(),
+  pinned: z.boolean().optional(),
   reactions: z.any().optional(),
 });
 
@@ -462,10 +468,68 @@ router.patch('/clients/:id/messages/:messageId', async (req: AuthRequest, res: R
         ...(data.status !== undefined ? { status: data.status } : {}),
         ...(data.resolved !== undefined ? { resolved: data.resolved } : {}),
         ...(data.flagged !== undefined ? { flagged: data.flagged } : {}),
+        ...(data.pinned !== undefined ? { pinned: data.pinned } : {}),
         ...(data.reactions !== undefined ? { reactions: serialiseJson(data.reactions) } : {}),
       },
     });
     res.json({ message });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return;
+    }
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+const broadcastSchema = z.object({
+  body: z.string().min(1, 'Message body is required'),
+  // 'all' | 'active' | explicit list of client user ids
+  audience: z.enum(['all', 'active']).optional(),
+  clientIds: z.array(z.string()).optional(),
+});
+
+// POST /api/admin/messages/broadcast — send the same message to many clients.
+router.post('/messages/broadcast', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const data = broadcastSchema.parse(req.body);
+
+    let targets: { id: string }[];
+    if (data.clientIds && data.clientIds.length > 0) {
+      targets = await prisma.user.findMany({
+        where: { role: 'CLIENT', id: { in: data.clientIds } },
+        select: { id: true },
+      });
+    } else {
+      const where: any = { role: 'CLIENT' };
+      if (data.audience === 'active') {
+        where.clientProfile = { is: { status: 'Active' } };
+      }
+      targets = await prisma.user.findMany({ where, select: { id: true } });
+    }
+
+    if (targets.length === 0) {
+      res.status(400).json({ error: 'No matching recipients.' });
+      return;
+    }
+
+    await prisma.message.createMany({
+      data: targets.map((t) => ({
+        clientUserId: t.id,
+        senderRole: 'ADMIN',
+        body: data.body,
+        type: 'text',
+        status: 'sent',
+      })),
+    });
+
+    audit('message.broadcast', {
+      adminEmail: req.user!.email,
+      adminId: req.user!.id,
+      recipientCount: targets.length,
+    });
+
+    res.status(201).json({ sent: targets.length });
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Validation failed', details: error.errors });

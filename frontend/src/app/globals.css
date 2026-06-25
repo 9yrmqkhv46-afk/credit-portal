@@ -575,6 +575,15 @@ h1, h2, h3, h4 {
 
   /* Composer send ripple. */
   .ripple-btn { position: relative; overflow: hidden; }
+
+  /* Live presence pulse — used on the online dot while polling is active. */
+  .animate-ping-slow { animation: pingSlow 1.8s cubic-bezier(0, 0, 0.2, 1) infinite; }
+}
+
+@keyframes pingSlow {
+  0% { box-shadow: 0 0 0 0 var(--accent-emerald); }
+  70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
 @keyframes stagePulse {
@@ -596,4 +605,55 @@ h1, h2, h3, h4 {
 @keyframes pillBob {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-14px); }
+}
+
+
+/* ===========================================================================
+ * Mandate 5 — Section A, Layer 6: drifting blueprint grid.
+ * Rendered as a body::before overlay above the wallpaper canvas (z 0) but
+ * below all page content. Barely-perceptible diagonal drift keeps the portal
+ * feeling alive even when nothing is happening.
+ * ======================================================================== */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0, 196, 212, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 196, 212, 0.022) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: gridDrift 60s linear infinite;
+}
+
+@keyframes gridDrift {
+  0% { background-position: 0 0; }
+  100% { background-position: 48px 48px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none !important; }
+}
+
+
+/* ===========================================================================
+ * Mandate 5 — Section F: post-login transitions.
+ * Client: a teal gradient sweep wipes across, then off to the right.
+ * Admin: glass panels assemble from the corners (staggered).
+ * ======================================================================== */
+@keyframes loginSweep {
+  0% { clip-path: inset(0 100% 0 0); }
+  55% { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 0 0 100%); }
+}
+@keyframes loginPanelIn {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+.login-sweep { animation: loginSweep 0.7s var(--ease-decel) both; }
+.login-panel { animation: loginPanelIn 0.5s var(--ease-spring) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .login-sweep, .login-panel { animation: none !important; }
 }

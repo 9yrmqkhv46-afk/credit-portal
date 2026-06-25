@@ -26,7 +26,7 @@ export type DebtType = 'HOME_LOAN' | 'PERSONAL_LOAN' | 'CAR_LOAN' | 'CREDIT_CARD
 export type PropertyType = 'OWNER_OCCUPIED' | 'INVESTMENT' | 'RENTAL';
 export type LoanPurpose = 'PURCHASE' | 'REFINANCE' | 'INVESTMENT' | 'CONSTRUCTION' | 'EQUITY_RELEASE';
 export type RepaymentType = 'PI' | 'IO';
-export type ClientStatus = 'Prospect' | 'Active' | 'Inactive';
+export type ClientStatus = 'Prospect' | 'Active' | 'Inactive' | 'Archived';
 
 export interface ClientProfile {
   id: string;
@@ -222,6 +222,8 @@ export interface AdminClientListItem {
     status: ClientStatus;
   } | null;
   loanScenarios: LoanScenario[];
+  /** ISO timestamp of the most recent message in the thread (admin list). */
+  lastMessageAt?: string | null;
 }
 
 export interface AdminClientDetail {
@@ -459,7 +461,7 @@ export interface ApplicationStage {
 
 // === Messaging Hub (Mandate 4C) ===
 export type SenderRole = 'CLIENT' | 'ADMIN' | 'SYSTEM';
-export type MessageType = 'text' | 'stage_update' | 'document_request' | 'borrowing_summary' | 'meeting_request';
+export type MessageType = 'text' | 'stage_update' | 'document_request' | 'borrowing_summary' | 'meeting_request' | 'attachment';
 export type MessageStatus = 'sent' | 'delivered' | 'read';
 
 export interface Message {
@@ -472,6 +474,7 @@ export interface Message {
   status: MessageStatus;
   resolved: boolean;
   flagged: boolean;
+  pinned?: boolean;
   reactions: string | null;
   createdAt: string;
 }

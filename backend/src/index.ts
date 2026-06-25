@@ -10,6 +10,7 @@ import servicingRoutes from './routes/servicing';
 import valuationRoutes from './routes/valuation';
 import timelineRoutes from './routes/timeline';
 import messageRoutes from './routes/messages';
+import meetingRoutes, { microsoftAuthRouter } from './routes/meetings';
 import { ensureSeedData } from './lib/bootstrap';
 
 const app = express();
@@ -61,7 +62,9 @@ app.use(cors({
   origin: config.frontendUrl,
   credentials: true,
 }));
-app.use(express.json());
+// Raise the JSON body limit so the messaging hub can accept small file
+// attachments encoded as base64 data URLs (images / PDFs up to a few MB).
+app.use(express.json({ limit: '12mb' }));
 
 // ---------------------------------------------------------------------------
 // IP-based rate limiter for auth endpoints
@@ -105,6 +108,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/valuation', valuationRoutes);
 app.use('/api/timeline', timelineRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/meetings', meetingRoutes);
+// Microsoft OAuth redirect flow (public, browser-driven; not under /api).
+app.use('/auth', microsoftAuthRouter);
 
 // Health check
 app.get('/api/health', (_req, res) => {

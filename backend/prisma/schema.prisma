@@ -493,6 +493,7 @@ model Message {
   status       String   @default("sent")
   resolved     Boolean  @default(false)
   flagged      Boolean  @default(false)
+  pinned       Boolean  @default(false)
   reactions    String?
   createdAt    DateTime @default(now())
 }
