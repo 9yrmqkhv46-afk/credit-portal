@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { AxiosError } from 'axios';
-import { AuthScene } from './AuthScene';
 
 type RoleTab = 'CLIENT' | 'ADMIN';
 
@@ -120,7 +119,8 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
 
   return (
     <div className="relative flex min-h-screen items-center justify-center px-4">
-      <AuthScene />
+      {/* The live wallpaper (WallpaperEngine) is mounted globally in the root
+          layout and now shows through on the login pages — no opaque backdrop. */}
 
       {/* Post-login transition overlays (Mandate 5 — Section F) */}
       {transition === 'CLIENT' && (
