@@ -10,6 +10,7 @@ import servicingRoutes from './routes/servicing';
 import valuationRoutes from './routes/valuation';
 import timelineRoutes from './routes/timeline';
 import messageRoutes from './routes/messages';
+import bankPolicyRoutes from './routes/bankPolicy';
 import attachmentRoutes from './routes/attachments';
 import { ensureSeedData } from './lib/bootstrap';
 
@@ -108,6 +109,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/valuation', valuationRoutes);
 app.use('/api/timeline', timelineRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/bank-policies', bankPolicyRoutes);
 app.use('/api/attachments', attachmentRoutes);
 
 // Health check
