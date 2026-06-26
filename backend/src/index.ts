@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { config } from './config';
 import authRoutes from './routes/auth';
 import clientRoutes from './routes/client';
+import assessmentRoutes from './routes/assessment';
 import scenarioRoutes from './routes/scenarios';
 import adminRoutes from './routes/admin';
 import servicingRoutes from './routes/servicing';
@@ -103,6 +104,7 @@ app.use('/api/auth/register', rateLimiter);
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/client', clientRoutes);
+app.use('/api/client', assessmentRoutes);
 app.use('/api/client', servicingRoutes);
 app.use('/api/loan-scenarios', scenarioRoutes);
 app.use('/api/admin', adminRoutes);

@@ -17,6 +17,7 @@ import { OtherLiabilitiesTable } from '@/components/liabilities/OtherLiabilities
 import { ExistingHomeLoansTable } from '@/components/loans/ExistingHomeLoansTable';
 import { ApplicationTimeline } from '@/components/timeline/ApplicationTimeline';
 import { AdminRemarksLog } from '@/components/admin/AdminRemarksLog';
+import { AdminAssessmentView } from '@/components/admin/AdminAssessmentView';
 import { useToast } from '@/components/ui/Toast';
 
 const STATUS_OPTIONS = [
@@ -221,6 +222,11 @@ export default function AdminClientDetailPage() {
             <ExistingHomeLoansTable readOnly initialLoans={fullProfile.existingHomeLoans || []} />
           </Card>
         </>
+      )}
+
+      {/* Bluehive assessment extras + broker details */}
+      {client.clientProfile && (
+        <AdminAssessmentView clientId={clientId} profile={client.clientProfile} />
       )}
 
       {/* Loan Scenarios */}

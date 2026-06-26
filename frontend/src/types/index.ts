@@ -41,8 +41,123 @@ export interface ClientProfile {
   maritalStatus: MaritalStatus;
   employmentStatus: EmploymentStatus;
   status: ClientStatus;
+  // --- Bluehive assessment extended fields (additive, all optional) ---
+  borrowerType?: string | null;
+  title?: string | null;
+  isFirstHomeBuyer?: boolean;
+  agesOfChildrenUnder18?: string | null;
+  driverLicenceNumber?: string | null;
+  driverLicenceExpiry?: string | null;
+  passportNumber?: string | null;
+  passportExpiry?: string | null;
+  countryOfCitizenship?: string | null;
+  currentAddressLivingArrangement?: string | null;
+  currentAddressDateMovedIn?: string | null;
+  previousAddress1?: string | null;
+  previousAddress1DateMovedIn?: string | null;
+  previousAddress1LivingArrangement?: string | null;
+  previousAddress2?: string | null;
+  previousAddress2DateMovedIn?: string | null;
+  previousAddress2LivingArrangement?: string | null;
+  hasDefaultsOrJudgements?: boolean;
+  creditHistoryDetails?: string | null;
+  mothersMaidenName?: string | null;
+  nearestRelativeName?: string | null;
+  nearestRelativeAddress?: string | null;
+  nearestRelativePhone?: string | null;
+  nearestRelativeRelationship?: string | null;
+  isCompanyTrustBorrower?: boolean;
+  companyName?: string | null;
+  trustName?: string | null;
+  companyAddress?: string | null;
+  acn?: string | null;
+  abn?: string | null;
+  dateOfIncorporation?: string | null;
+  specifiedBeneficiaries?: string | null;
+  insuranceDetails?: string | null;
+  preferredInterestType?: string | null;
+  wantsOffsetAccount?: boolean;
+  interestedInCarLoans?: boolean;
+  interestedInEquipmentFinance?: boolean;
+  interestedInCommercialFinance?: boolean;
+  interestedInSMSF?: boolean;
+  additionalNotes?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CoBorrowerProfile {
+  id: string;
+  clientProfileId: string;
+  relationshipToBorrower1?: string | null;
+  borrowerType?: string | null;
+  title?: string | null;
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  dateOfBirth?: string | null;
+  maritalStatus?: string | null;
+  currentAddress?: string | null;
+  mobilePhone?: string | null;
+  email?: string | null;
+  driverLicenceNumber?: string | null;
+  passportNumber?: string | null;
+  countryOfCitizenship?: string | null;
+  residencyStatus?: string | null;
+  visaSubclass?: string | null;
+  hasDefaultsOrJudgements?: boolean;
+  creditHistoryDetails?: string | null;
+}
+
+export interface Employment {
+  id: string;
+  clientProfileId: string;
+  owner: string;
+  sequence: number;
+  isSelfEmployed: boolean;
+  abn?: string | null;
+  employerName?: string | null;
+  employerAddress?: string | null;
+  employerPhone?: string | null;
+  contactName?: string | null;
+  employmentType?: string | null;
+  jobTitle?: string | null;
+  dateStarted?: string | null;
+  dateFinished?: string | null;
+  annualSalaryExSuper?: number | null;
+  includesBonus?: boolean;
+  includesCommission?: boolean;
+  includesOvertime?: boolean;
+  includesAllowances?: boolean;
+}
+
+export interface BankAccount {
+  id: string;
+  clientProfileId: string;
+  institution?: string | null;
+  accountNumber?: string | null;
+  balance?: number | null;
+  accountHolders?: string | null;
+  accountType?: string | null;
+}
+
+export interface NonPropertyAsset {
+  id: string;
+  clientProfileId: string;
+  assetType: string;
+  description?: string | null;
+  value?: number | null;
+  owner?: string | null;
+}
+
+export interface BrokerCompletedDetails {
+  id: string;
+  clientProfileId: string;
+  conveyancerName?: string | null;
+  conveyancerAddress?: string | null;
+  conveyancerPhone?: string | null;
+  conveyancerEmail?: string | null;
+  lenderSelected?: string | null;
 }
 
 export interface IncomeSource {

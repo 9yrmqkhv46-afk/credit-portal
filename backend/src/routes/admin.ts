@@ -71,6 +71,11 @@ router.get('/clients/:id', async (req: AuthRequest, res: Response): Promise<void
             existingHomeLoans: true,
             personalLiabilities: true,
             livingExpenses: true,
+            coBorrower: true,
+            employments: true,
+            bankAccounts: true,
+            nonPropertyAssets: true,
+            brokerDetails: true,
           },
         },
         loanScenarios: {
@@ -466,6 +471,39 @@ router.patch('/clients/:id/messages/:messageId', async (req: AuthRequest, res: R
       },
     });
     res.json({ message });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return;
+    }
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+const brokerDetailsSchema = z.object({
+  conveyancerName: z.string().nullable().optional(),
+  conveyancerAddress: z.string().nullable().optional(),
+  conveyancerPhone: z.string().nullable().optional(),
+  conveyancerEmail: z.string().nullable().optional(),
+  lenderSelected: z.string().nullable().optional(),
+});
+
+// PUT /api/admin/clients/:id/broker-details — upsert broker-completed section.
+router.put('/clients/:id/broker-details', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const data = brokerDetailsSchema.parse(req.body);
+    const profile = await prisma.clientProfile.findFirst({ where: { userId: req.params.id } });
+    if (!profile) {
+      res.status(404).json({ error: 'Client profile not found.' });
+      return;
+    }
+    const brokerDetails = await prisma.brokerCompletedDetails.upsert({
+      where: { clientProfileId: profile.id },
+      update: data,
+      create: { clientProfileId: profile.id, ...data },
+    });
+    audit('client.broker-details.update', { adminEmail: req.user!.email, clientId: req.params.id });
+    res.json({ brokerDetails });
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
