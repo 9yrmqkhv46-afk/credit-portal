@@ -33,6 +33,15 @@ const NAV: ShellNavItem[] = [
       </svg>
     ),
   },
+  {
+    href: '/admin/studio',
+    label: 'Borrowing Studio',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-5 w-5">
+        <path d="M3 13h2v7H3v-7zm4-5h2v12H7V8zm4 8h2v4h-2v-4zm4-12h2v16h-2V4zm4 6h2v10h-2V10z" />
+      </svg>
+    ),
+  },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
