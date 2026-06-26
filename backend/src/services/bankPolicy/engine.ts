@@ -217,8 +217,8 @@ export function runBankCalc(input: ScenarioInput, policy: BankPolicy): BankCalcR
   const totalMonthlyCommitments = commitmentsMonthly(included, debts, product, duplicateDebtIds);
   const netMonthlySurplus = totalMonthlyIncome - (totalMonthlyExpenses + totalMonthlyCommitments);
 
-  // Stress rate (APRA-style buffer; extra IO loading if applicable).
-  let stressRateUsed = product.baseRateAssumption + product.serviceabilityBufferBps / 10000;
+  // Stress rate: max(actual rate, policy base) + APRA-style buffer; extra IO loading.
+  let stressRateUsed = Math.max(scenario.interestRate, product.baseRateAssumption) + product.serviceabilityBufferBps / 10000;
   if (scenario.repaymentType === 'IO' && product.interestOnlyTreatment?.allowed) {
     stressRateUsed += product.interestOnlyTreatment.ioAssessmentRateLoadingBps / 10000;
   }

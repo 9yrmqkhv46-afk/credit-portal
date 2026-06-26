@@ -4,6 +4,9 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 import { prisma } from '../lib/prisma';
 import { computePropertyGrowth } from '../services/servicing';
+import { rankBanksForScenario } from '../services/bankPolicy/ranking';
+import { getActivePolicies } from '../services/bankPolicy/policies';
+import { ScenarioInput, Frequency } from '../services/bankPolicy/types';
 import { ensureTimeline, activateNextUpcoming, TOTAL_STAGES } from '../lib/timeline';
 
 const router = Router();
@@ -510,6 +513,146 @@ router.put('/clients/:id/broker-details', async (req: AuthRequest, res: Response
       return;
     }
     res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ===========================================================================
+// Bank recommendations — read the client's stored CRM data, build a scenario,
+// rank all active 2026 bank policies, and suggest the TOP 3 lenders.
+// ===========================================================================
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+function toMonthly(amount: number, freq?: string): number {
+  switch (freq) {
+    case 'WEEKLY': return (amount * 52) / 12;
+    case 'FORTNIGHTLY': return (amount * 26) / 12;
+    case 'QUARTERLY': return (amount * 4) / 12;
+    case 'ANNUAL': return amount / 12;
+    default: return amount; // MONTHLY
+  }
+}
+
+/** Map the client's stored profile + scenarios into the engine's ScenarioInput. */
+function buildScenarioFromClient(profile: any, scenarios: any[]): ScenarioInput {
+  const partnered = profile?.maritalStatus === 'MARRIED' || profile?.maritalStatus === 'DE_FACTO';
+  const numberOfAdults = (partnered ? 2 : 1) + (profile?.numberOfAdultDependants || 0);
+  const numberOfChildren = profile?.numberOfChildDependants || 0;
+  const isSelfEmployed = profile?.employmentStatus === 'SELF_EMPLOYED';
+
+  // Income — skip RENTAL here (the engine aggregates rental from properties).
+  const incomeSources: ScenarioInput['incomeSources'] = [];
+  const mapType = (t: string) => {
+    if (t === 'SALARY') return 'SALARY_PRIMARY';
+    if (t === 'BONUS' || t === 'COMMISSION') return 'SALARY_SECONDARY';
+    if (t === 'GOVERNMENT') return 'GOV';
+    if (t === 'BUSINESS') return 'BUSINESS';
+    return 'OTHER';
+  };
+  for (const s of (profile?.incomeSources || [])) {
+    if (s.type === 'RENTAL') continue;
+    incomeSources.push({ type: mapType(s.type) as any, amount: toMonthly(s.amount || 0, s.frequency), frequency: 'MONTHLY' as Frequency });
+  }
+  if (incomeSources.length === 0 && profile?.annualIncome) {
+    incomeSources.push({ type: 'SALARY_PRIMARY', amount: (profile.annualIncome as number) / 12, frequency: 'MONTHLY' });
+  }
+
+  // Expenses from the declared expense summary (monthly), rent separate.
+  const es = profile?.expenseSummary;
+  let declaredMonthlyLiving = 0;
+  let monthlyRent = 0;
+  if (es) {
+    const cats: Array<[string, string]> = [
+      ['groceries', 'groceriesFreq'], ['utilities', 'utilitiesFreq'], ['transport', 'transportFreq'],
+      ['insurance', 'insuranceFreq'], ['education', 'educationFreq'], ['childcare', 'childcareFreq'],
+      ['entertainment', 'entertainmentFreq'], ['otherExpenses', 'otherExpensesFreq'],
+    ];
+    for (const [amt, fr] of cats) declaredMonthlyLiving += toMonthly(es[amt] || 0, es[fr]);
+    monthlyRent = toMonthly(es.rental || 0, es.rentalFreq);
+  }
+
+  // Properties (owner-occ + investment + commercial), with their secured loans.
+  const mapPropType = (t: string) => (t === 'INVESTMENT' || t === 'RENTAL') ? 'INVESTMENT' : t === 'COMMERCIAL' ? 'COMMERCIAL' : 'OWNER_OCC';
+  const properties: ScenarioInput['properties'] = (profile?.properties || []).map((p: any) => ({
+    id: p.id,
+    type: mapPropType(p.type) as any,
+    estimatedValue: p.estimatedValue || 0,
+    currentLoanBalance: p.mortgageBalance ?? p.remainingLoanAmount ?? p.loanAmount ?? 0,
+    currentRepaymentAmount: p.loanMonthlyRepayment ?? 0,
+    grossRentalIncomeMonthly: p.rentalIncomeAmount != null
+      ? toMonthly(p.rentalIncomeAmount, p.rentalIncomeFrequency)
+      : toMonthly(p.rentalIncome || 0, 'MONTHLY'),
+    lender: p.currentBank || undefined,
+    isIncludedInCalc: p.includeInServicing !== false,
+  }));
+
+  // Standalone debts (credit cards + non-property loans).
+  const mapDebt = (t: string) => {
+    if (t === 'CREDIT_CARD') return 'CREDIT_CARD';
+    if (t === 'PERSONAL_LOAN') return 'PERSONAL_LOAN';
+    if (t === 'CAR_LOAN') return 'CAR_LOAN';
+    if (t === 'HECS') return 'HECS_HELP';
+    return 'OTHER';
+  };
+  const debts: ScenarioInput['debts'] = (profile?.existingDebts || [])
+    .filter((d: any) => d.type !== 'HOME_LOAN')
+    .map((d: any) => ({
+      id: d.id,
+      type: mapDebt(d.type) as any,
+      source: 'STANDALONE' as const,
+      lender: d.description || undefined,
+      creditLimit: d.creditLimit ?? undefined,
+      currentBalance: d.outstandingBalance ?? undefined,
+      monthlyRepayment: d.monthlyRepayment ?? undefined,
+    }));
+
+  // Scenario from the latest loan scenario, with sensible fallbacks.
+  const sc = scenarios?.[0];
+  const annual = incomeSources.reduce((t, s) => t + s.amount * 12, 0);
+  const topPropValue = Math.max(0, ...properties.map((p) => p.estimatedValue));
+  const purpose = sc?.purpose === 'INVESTMENT' ? 'INVESTMENT' : 'OWNER_OCC';
+  let rate = typeof sc?.interestRate === 'number' ? sc.interestRate : 0.06;
+  if (rate > 1) rate = rate / 100;
+  const targetLoanAmount = sc?.maxBorrowingCapacity || Math.round((annual * 5) / 1000) * 1000 || 600_000;
+  const targetPropertyValue = topPropValue > 0 ? topPropValue : Math.round(targetLoanAmount / 0.8);
+
+  return {
+    client: { numberOfAdults, numberOfChildren, isSelfEmployed },
+    incomeSources,
+    expenses: { declaredMonthlyLiving, monthlyRent },
+    properties,
+    debts,
+    scenario: {
+      purpose: purpose as any,
+      targetLoanAmount,
+      targetPropertyValue,
+      termYears: sc?.loanTermYears || 30,
+      interestRate: rate,
+      repaymentType: sc?.repaymentType === 'IO' ? 'IO' : 'PI',
+    },
+  };
+}
+
+// GET /api/admin/clients/:id/bank-recommendations — top-3 (+ all) lenders.
+router.get('/clients/:id/bank-recommendations', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const client = await prisma.user.findFirst({
+      where: { id: req.params.id, role: 'CLIENT' },
+      include: {
+        clientProfile: { include: { incomeSources: true, existingDebts: true, properties: true, expenseSummary: true } },
+        loanScenarios: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+    if (!client || !client.clientProfile) {
+      res.status(404).json({ error: 'Client profile not found. Complete the profile first.' });
+      return;
+    }
+    const input = buildScenarioFromClient(client.clientProfile, (client as any).loanScenarios || []);
+    const all = rankBanksForScenario(input, getActivePolicies());
+    audit('client.bank-recommendations', { adminEmail: req.user!.email, clientId: req.params.id, top: all.slice(0, 3).map((r) => r.brandCode) });
+    res.json({ scenarioUsed: input.scenario, top3: all.slice(0, 3), all });
+  } catch (error) {
+    res.status(500).json({ error: 'Could not compute bank recommendations.' });
   }
 });
 

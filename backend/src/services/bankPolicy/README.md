@@ -20,7 +20,8 @@ scenario against each lender, and ranks which bank(s) to approach.
 
 API: `backend/src/routes/bankPolicy.ts` (admin-only) — `GET /api/bank-policies`,
 `GET /api/bank-policies/:brandCode`, `POST /api/bank-policies/rank`,
-`POST /api/bank-policies/:brandCode/calc`.
+`POST /api/bank-policies/:brandCode/calc`. Plus
+`GET /api/admin/clients/:id/bank-recommendations` (top-3 from a client's data).
 
 ## How a calculation works (`runBankCalc`)
 
@@ -80,9 +81,20 @@ multi-bank ranking + ordering, HSBC full-portfolio selection, and duplicate
 loan detection. Example outcome for a stretched loan: NAB/ANZ (higher DTI)
 rank above Bendigo (tighter cap + higher buffer).
 
-## Planned follow-up (not yet built)
+## Docs
 
-- DB-backed policy persistence + version history/audit log (currently the seed
-  library is served from code).
-- Admin UI: policy editor (sliders/toggles + JSON preview), "test with sample
-  scenario" button, and the per-bank **property inclusion matrix**.
+- **POLICIES.md** — the full per-bank 2026 modelling policy tables (LVR, DTI, buffers, income shading, property treatment).
+- **CALCULATIONS.md** — every formula the engine uses (income shading, HEM floor, serviceability, DTI, LVR, ranking, and the admin top-3 algorithm), written in plain text (no LaTeX).
+
+## Admin "suggest top 3 banks"
+
+`GET /api/admin/clients/:id/bank-recommendations` reads the client's stored CRM
+data (profile, income, expenses, properties, debts, latest scenario), maps it
+into a scenario, runs the ranking, and returns `{ scenarioUsed, top3, all }`.
+Surfaced on the admin client detail page as **"Recommended Lenders (Top 3)"**.
+
+## Status
+
+Done: hard-coded 2026 policy library (10 banks), engine, ranking, DB-backed
+versioning + audit, admin policy editor + scenario runner + property inclusion
+matrix, and the client-data-driven top-3 recommendation.

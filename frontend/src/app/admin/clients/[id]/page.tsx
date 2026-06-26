@@ -18,6 +18,7 @@ import { ExistingHomeLoansTable } from '@/components/loans/ExistingHomeLoansTabl
 import { ApplicationTimeline } from '@/components/timeline/ApplicationTimeline';
 import { AdminRemarksLog } from '@/components/admin/AdminRemarksLog';
 import { AdminAssessmentView } from '@/components/admin/AdminAssessmentView';
+import { AdminBankRecommendations } from '@/components/admin/AdminBankRecommendations';
 import { useToast } from '@/components/ui/Toast';
 
 const STATUS_OPTIONS = [
@@ -223,6 +224,9 @@ export default function AdminClientDetailPage() {
           </Card>
         </>
       )}
+
+      {/* Top-3 bank recommendations from this client's data */}
+      <AdminBankRecommendations clientId={clientId} />
 
       {/* Bluehive assessment extras + broker details */}
       {client.clientProfile && (
