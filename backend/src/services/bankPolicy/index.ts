@@ -17,6 +17,13 @@ export {
 } from './summaries';
 export type { PolicyDoc, DocSection, DocTable } from './summaries';
 
+// Editable Word document (.docx) as the source of truth: export + import.
+export { buildPolicyDocx, buildLibraryDocx } from './docxExport';
+export { importPolicyDocx, extractDocxLines, parseParamLines } from './docxImport';
+export { serializePolicyParams, applyParamsToPolicy, PRODUCT_KEYS } from './docxFormat';
+export type { ParamLine, ApplyResult } from './docxFormat';
+export type { DocxImportResult } from './docxImport';
+
 // Feature B — broker-facing explanations.
 export { explainRecommendation, explainRecommendations } from './explain';
 export type { RecommendationExplanation } from './explain';

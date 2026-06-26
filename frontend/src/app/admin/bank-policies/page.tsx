@@ -5,30 +5,43 @@ import api from '@/lib/api';
 import { useToast } from '@/components/ui/Toast';
 import { BankPolicyLibrary } from '@/components/admin/BankPolicyLibrary';
 import { BankScenarioRunner } from '@/components/admin/BankScenarioRunner';
+import { BankPolicyDocx } from '@/components/admin/BankPolicyDocx';
+
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 export default function BankPoliciesPage() {
-  const [tab, setTab] = useState<'library' | 'scenario'>('library');
+  const [tab, setTab] = useState<'library' | 'word' | 'scenario'>('library');
   const [downloading, setDownloading] = useState(false);
   const { toast } = useToast();
 
   const downloadWord = async () => {
     setDownloading(true);
     try {
-      const res = await api.get('/bank-policies/summaries/word', { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/msword' }));
+      const res = await api.get('/bank-policies/docx', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: DOCX_MIME }));
       const a = document.createElement('a');
       a.href = url;
-      a.download = '2026-bank-lending-policy-summaries.doc';
+      a.download = '2026-bank-lending-policy-library.docx';
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch {
-      toast('Could not download the policy summaries', { accent: 'crimson' });
+      toast('Could not download the policy document', { accent: 'crimson' });
     } finally {
       setDownloading(false);
     }
   };
+
+  const tabBtn = (id: typeof tab, label: string) => (
+    <button
+      type="button"
+      onClick={() => setTab(id)}
+      className={`rounded-full px-4 py-1.5 text-sm font-medium ring-1 transition ${tab === id ? 'bg-brand/20 text-brand ring-brand/50' : 'text-secondary ring-white/15 hover:bg-white/10'}`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div className="space-y-5">
@@ -39,16 +52,19 @@ export default function BankPoliciesPage() {
           <p className="mt-1 text-xs text-muted">Modelled estimates for indicative comparison only — not official lender policy or a credit decision.</p>
         </div>
         <button type="button" onClick={downloadWord} disabled={downloading} className="shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-secondary ring-1 ring-white/15 hover:bg-white/10 disabled:opacity-50">
-          {downloading ? 'Generating…' : 'Download Word summaries (.doc)'}
+          {downloading ? 'Generating…' : 'Download Word doc (.docx)'}
         </button>
       </div>
 
-      <div className="flex gap-2">
-        <button type="button" onClick={() => setTab('library')} className={`rounded-full px-4 py-1.5 text-sm font-medium ring-1 transition ${tab === 'library' ? 'bg-brand/20 text-brand ring-brand/50' : 'text-secondary ring-white/15 hover:bg-white/10'}`}>Policy Library</button>
-        <button type="button" onClick={() => setTab('scenario')} className={`rounded-full px-4 py-1.5 text-sm font-medium ring-1 transition ${tab === 'scenario' ? 'bg-brand/20 text-brand ring-brand/50' : 'text-secondary ring-white/15 hover:bg-white/10'}`}>Which Bank? (Scenario)</button>
+      <div className="flex flex-wrap gap-2">
+        {tabBtn('library', 'Policy Library')}
+        {tabBtn('word', 'Edit in Word')}
+        {tabBtn('scenario', 'Which Bank? (Scenario)')}
       </div>
 
-      {tab === 'library' ? <BankPolicyLibrary /> : <BankScenarioRunner />}
+      {tab === 'library' && <BankPolicyLibrary />}
+      {tab === 'word' && <BankPolicyDocx />}
+      {tab === 'scenario' && <BankScenarioRunner />}
     </div>
   );
 }

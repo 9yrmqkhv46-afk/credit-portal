@@ -9,10 +9,14 @@ import {
   listVersionsForBrand, createVersion, activateVersion, cloneVersion, listAudit,
 } from '../services/bankPolicy/store';
 import {
-  buildBankSummary, buildAllSummaries, renderMarkdown, renderWordHtml,
+  buildBankSummary, buildAllSummaries, renderMarkdown,
 } from '../services/bankPolicy/summaries';
 import { explainRecommendations } from '../services/bankPolicy/explain';
 import { matchBanksForScenario } from '../services/bankPolicy/match';
+import { buildPolicyDocx, buildLibraryDocx } from '../services/bankPolicy/docxExport';
+import { importPolicyDocx } from '../services/bankPolicy/docxImport';
+
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 /**
  * 2026 Bank Policy Library API (admin). DB-backed with version history + audit.
@@ -69,14 +73,28 @@ router.get('/summaries', async (_req: AuthRequest, res: Response): Promise<void>
   }
 });
 
-// GET /api/bank-policies/summaries/word — download the full library as a Word (.doc) file.
+// GET /api/bank-policies/summaries/word — download the full library as an
+// editable Microsoft Word (.docx) document (prose + machine-readable params).
 router.get('/summaries/word', async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
     const policies = await getActivePolicies();
-    const html = renderWordHtml(policies);
-    res.setHeader('Content-Type', 'application/msword');
-    res.setHeader('Content-Disposition', 'attachment; filename="2026-bank-lending-policy-summaries.doc"');
-    res.send(html);
+    const buffer = await buildLibraryDocx(policies);
+    res.setHeader('Content-Type', DOCX_MIME);
+    res.setHeader('Content-Disposition', 'attachment; filename="2026-bank-lending-policy-library.docx"');
+    res.send(buffer);
+  } catch {
+    res.status(500).json({ error: 'Could not generate the Word document.' });
+  }
+});
+
+// GET /api/bank-policies/docx — alias: full editable library as .docx.
+router.get('/docx', async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const policies = await getActivePolicies();
+    const buffer = await buildLibraryDocx(policies);
+    res.setHeader('Content-Type', DOCX_MIME);
+    res.setHeader('Content-Disposition', 'attachment; filename="2026-bank-lending-policy-library.docx"');
+    res.send(buffer);
   } catch {
     res.status(500).json({ error: 'Could not generate the Word document.' });
   }
@@ -122,6 +140,45 @@ router.get('/version/:id', async (req: AuthRequest, res: Response): Promise<void
   const policy = await getVersionById(req.params.id);
   if (!policy) { res.status(404).json({ error: 'Version not found.' }); return; }
   res.json({ policy });
+});
+
+// GET /api/bank-policies/:brandCode/docx — download this bank's policy as an
+// editable .docx (the Word document is the source of truth — edit & re-upload).
+router.get('/:brandCode/docx', async (req: AuthRequest, res: Response): Promise<void> => {
+  const policy = await getActiveByBrand(req.params.brandCode);
+  if (!policy) { res.status(404).json({ error: 'Policy not found.' }); return; }
+  const buffer = await buildPolicyDocx(policy);
+  res.setHeader('Content-Type', DOCX_MIME);
+  res.setHeader('Content-Disposition', `attachment; filename="${policy.brandCode}-2026-lending-policy.docx"`);
+  res.send(buffer);
+});
+
+// POST /api/bank-policies/:brandCode/docx — import an EDITED .docx and save it
+// as a new active policy version. Body: { dataBase64, activate?=true }.
+// This makes the Word document drive the engine in place of editing config.
+router.post('/:brandCode/docx', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const dataBase64 = String(req.body?.dataBase64 || '');
+    const activate = req.body?.activate !== false; // default: activate
+    if (!dataBase64) { res.status(400).json({ error: 'A base64-encoded .docx (dataBase64) is required.' }); return; }
+
+    const base = await getActiveByBrand(req.params.brandCode);
+    if (!base) { res.status(404).json({ error: 'Policy not found.' }); return; }
+
+    const buffer = Buffer.from(dataBase64.replace(/^data:[^,]*,/, ''), 'base64');
+    const { policy, applied, warnings, brandCode } = await importPolicyDocx(buffer, base);
+    if (brandCode !== req.params.brandCode) { res.status(400).json({ error: 'Document brand does not match this bank.' }); return; }
+    if (applied === 0) { res.status(400).json({ error: 'No editable parameters were found in the document.' }); return; }
+
+    // Stamp a distinct version label so the import is a new, traceable version.
+    if (policy.policyVersion === base.policyVersion) {
+      policy.policyVersion = `${base.policyVersion}+word-${new Date().toISOString().slice(0, 10)}`;
+    }
+    const saved = await createVersion(policy, { activate, actorEmail: req.user!.email });
+    res.status(201).json({ policy: saved, applied, warnings, activated: activate });
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : 'Could not import the Word document.' });
+  }
 });
 
 // GET /api/bank-policies/:brandCode/summary — Word-style summary for one bank.
