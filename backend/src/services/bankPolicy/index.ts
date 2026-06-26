@@ -24,6 +24,22 @@ export { serializePolicyParams, applyParamsToPolicy, PRODUCT_KEYS } from './docx
 export type { ParamLine, ApplyResult } from './docxFormat';
 export type { DocxImportResult } from './docxImport';
 
+// Senior-grade governance features: diffs, integrity, validation, impact, security.
+// NOTE: DB-backed helpers (timeline/verify/rollback/export) live in ./store and
+// are imported directly by routes — they are intentionally NOT re-exported here
+// so this barrel stays free of Prisma for pure-unit testing.
+export { diffPolicies, summariseChanges } from './policyDiff';
+export type { PolicyChange } from './policyDiff';
+export { computePolicyHash, verifyIntegrity } from './integrity';
+export type { IntegrityResult } from './integrity';
+export {
+  validatePolicy, previewImpact, sensitivity, CANONICAL_SCENARIOS,
+} from './policyImpact';
+export type { PolicyIssue, ImpactPreview, ScenarioImpact, SensitivityVariable, SensitivityPoint, CanonicalScenario } from './policyImpact';
+export {
+  validateDocxUpload, decodeBase64Upload, sanitizeScenarioInput, createRateLimiter, MAX_DOCX_BYTES,
+} from './security';
+
 // Feature B — broker-facing explanations.
 export { explainRecommendation, explainRecommendations } from './explain';
 export type { RecommendationExplanation } from './explain';

@@ -7,6 +7,8 @@ import { ScenarioInput, BankPolicy } from '../services/bankPolicy/types';
 import {
   ensureSeed, listVersions, getActivePolicies, getActiveByBrand, getVersionById,
   listVersionsForBrand, createVersion, activateVersion, cloneVersion, listAudit,
+  getPolicyTimeline, diffVersions, verifyVersionIntegrity, verifyActiveIntegrity,
+  rollbackToVersion, exportLibrary, restoreLibrary,
 } from '../services/bankPolicy/store';
 import {
   buildBankSummary, buildAllSummaries, renderMarkdown,
@@ -15,8 +17,13 @@ import { explainRecommendations } from '../services/bankPolicy/explain';
 import { matchBanksForScenario } from '../services/bankPolicy/match';
 import { buildPolicyDocx, buildLibraryDocx } from '../services/bankPolicy/docxExport';
 import { importPolicyDocx } from '../services/bankPolicy/docxImport';
+import { validatePolicy, previewImpact, sensitivity, SensitivityVariable } from '../services/bankPolicy/policyImpact';
+import { decodeBase64Upload, sanitizeScenarioInput, createRateLimiter } from '../services/bankPolicy/security';
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+/** Rate limiter for mutating policy endpoints (per admin, fixed window). */
+const policyMutationLimiter = createRateLimiter(40, 60_000);
 
 /**
  * 2026 Bank Policy Library API (admin). DB-backed with version history + audit.
@@ -41,6 +48,55 @@ router.get('/audit', async (req: AuthRequest, res: Response): Promise<void> => {
   res.json({ audit: await listAudit(brand) });
 });
 
+// GET /api/bank-policies/audit.csv — compliance export of the audit log.
+router.get('/audit.csv', async (req: AuthRequest, res: Response): Promise<void> => {
+  const brand = typeof req.query.brand === 'string' ? req.query.brand : undefined;
+  const rows = await listAudit(brand, 5000);
+  const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const header = 'createdAt,brandCode,action,actorEmail,detail';
+  const body = rows.map((r) => [r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt, r.brandCode, r.action, r.actorEmail, r.detail].map(esc).join(',')).join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="bank-policy-audit.csv"');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(`${header}\n${body}`);
+});
+
+// GET /api/bank-policies/export — full library JSON snapshot (backup / DR).
+router.get('/export', async (_req: AuthRequest, res: Response): Promise<void> => {
+  const snapshot = await exportLibrary();
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="bank-policy-library-${new Date().toISOString().slice(0, 10)}.json"`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(JSON.stringify(snapshot, null, 2));
+});
+
+// POST /api/bank-policies/import — restore policies from a JSON snapshot.
+router.post('/import', policyMutationLimiter, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const snapshot = req.body?.snapshot ?? req.body;
+    if (!snapshot || !Array.isArray(snapshot.policies)) { res.status(400).json({ error: 'A snapshot with a policies array is required.' }); return; }
+    const result = await restoreLibrary(snapshot, req.user!.email);
+    res.status(201).json(result);
+  } catch {
+    res.status(500).json({ error: 'Could not restore the library snapshot.' });
+  }
+});
+
+// GET /api/bank-policies/integrity — tamper-evidence sweep over active policies.
+router.get('/integrity', async (_req: AuthRequest, res: Response): Promise<void> => {
+  const results = await verifyActiveIntegrity();
+  res.json({ allValid: results.every((r) => r.ok), results });
+});
+
+// GET /api/bank-policies/diff?from=<id>&to=<id> — parameter diff between versions.
+router.get('/diff', async (req: AuthRequest, res: Response): Promise<void> => {
+  const from = String(req.query.from || ''), to = String(req.query.to || '');
+  if (!from || !to) { res.status(400).json({ error: 'from and to version ids are required.' }); return; }
+  const result = await diffVersions(from, to);
+  if (!result) { res.status(404).json({ error: 'One or both versions were not found.' }); return; }
+  res.json({ changes: result.changes, fromVersion: result.from.policyVersion, toVersion: result.to.policyVersion });
+});
+
 // POST /api/bank-policies/rank — rank all active banks for a scenario.
 router.post('/rank', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -50,9 +106,10 @@ router.post('/rank', async (req: AuthRequest, res: Response): Promise<void> => {
       return;
     }
     const policies = await getActivePolicies();
-    const recommendations = rankBanksForScenario(input, policies);
+    const safe = sanitizeScenarioInput(input);
+    const recommendations = rankBanksForScenario(safe, policies);
     // Feature B: attach a broker-facing explanation to each recommendation.
-    const explanations = explainRecommendations(recommendations, input.scenario, policies);
+    const explanations = explainRecommendations(recommendations, safe.scenario, policies);
     res.json({ recommendations, explanations });
   } catch {
     res.status(500).json({ error: 'Could not rank banks for this scenario.' });
@@ -113,26 +170,33 @@ router.post('/match', async (req: AuthRequest, res: Response): Promise<void> => 
       return;
     }
     const policies = await getActivePolicies();
-    res.json(matchBanksForScenario(input, policies));
+    res.json(matchBanksForScenario(sanitizeScenarioInput(input), policies));
   } catch {
     res.status(500).json({ error: 'Could not match banks for this scenario.' });
   }
 });
 
 // POST /api/bank-policies/version/:id/activate
-router.post('/version/:id/activate', async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/version/:id/activate', policyMutationLimiter, async (req: AuthRequest, res: Response): Promise<void> => {
   const updated = await activateVersion(req.params.id, req.user!.email);
   if (!updated) { res.status(404).json({ error: 'Version not found.' }); return; }
   res.json({ policy: updated });
 });
 
 // POST /api/bank-policies/version/:id/clone  { policyVersion }
-router.post('/version/:id/clone', async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/version/:id/clone', policyMutationLimiter, async (req: AuthRequest, res: Response): Promise<void> => {
   const label = String(req.body?.policyVersion || '').trim();
   if (!label) { res.status(400).json({ error: 'A new policyVersion label is required.' }); return; }
   const cloned = await cloneVersion(req.params.id, label, req.user!.email);
   if (!cloned) { res.status(404).json({ error: 'Version not found.' }); return; }
   res.status(201).json({ policy: cloned });
+});
+
+// GET /api/bank-policies/version/:id/verify — tamper-evidence check for one version.
+router.get('/version/:id/verify', async (req: AuthRequest, res: Response): Promise<void> => {
+  const result = await verifyVersionIntegrity(req.params.id);
+  if (!result) { res.status(404).json({ error: 'Version not found.' }); return; }
+  res.json(result);
 });
 
 // GET /api/bank-policies/version/:id — full policy JSON for one version.
@@ -153,32 +217,79 @@ router.get('/:brandCode/docx', async (req: AuthRequest, res: Response): Promise<
   res.send(buffer);
 });
 
-// POST /api/bank-policies/:brandCode/docx — import an EDITED .docx and save it
-// as a new active policy version. Body: { dataBase64, activate?=true }.
-// This makes the Word document drive the engine in place of editing config.
-router.post('/:brandCode/docx', async (req: AuthRequest, res: Response): Promise<void> => {
+// POST /api/bank-policies/:brandCode/docx — import an EDITED .docx.
+// Body: { dataBase64, preview?, activate?=true, force? }.
+//  - preview:true  => dry-run: parse + validate + impact preview, save nothing.
+//  - otherwise     => commit: blocked (422) if guardrail ERRORS unless force:true.
+router.post('/:brandCode/docx', policyMutationLimiter, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const dataBase64 = String(req.body?.dataBase64 || '');
+    const preview = req.body?.preview === true;
+    const force = req.body?.force === true;
     const activate = req.body?.activate !== false; // default: activate
     if (!dataBase64) { res.status(400).json({ error: 'A base64-encoded .docx (dataBase64) is required.' }); return; }
 
     const base = await getActiveByBrand(req.params.brandCode);
     if (!base) { res.status(404).json({ error: 'Policy not found.' }); return; }
 
-    const buffer = Buffer.from(dataBase64.replace(/^data:[^,]*,/, ''), 'base64');
+    // Security: validate size + ZIP/OOXML signature before parsing.
+    const buffer = decodeBase64Upload(dataBase64);
     const { policy, applied, warnings, brandCode } = await importPolicyDocx(buffer, base);
     if (brandCode !== req.params.brandCode) { res.status(400).json({ error: 'Document brand does not match this bank.' }); return; }
     if (applied === 0) { res.status(400).json({ error: 'No editable parameters were found in the document.' }); return; }
 
-    // Stamp a distinct version label so the import is a new, traceable version.
+    // Guardrails + real-world impact (always computed so the UI can show them).
+    const validation = validatePolicy(policy);
+    const impact = previewImpact(base, policy);
+
+    if (preview) {
+      res.json({ preview: true, applied, warnings, validation, impact, candidatePolicyVersion: policy.policyVersion });
+      return;
+    }
+
+    // Commit path: refuse to activate a policy with hard errors unless forced.
+    if (!validation.valid && !force) {
+      res.status(422).json({ error: 'Policy failed validation. Fix the errors or resubmit with force:true.', validation, impact });
+      return;
+    }
+
     if (policy.policyVersion === base.policyVersion) {
       policy.policyVersion = `${base.policyVersion}+word-${new Date().toISOString().slice(0, 10)}`;
     }
     const saved = await createVersion(policy, { activate, actorEmail: req.user!.email });
-    res.status(201).json({ policy: saved, applied, warnings, activated: activate });
+    res.status(201).json({ policy: saved, applied, warnings, validation, impact, activated: activate });
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'Could not import the Word document.' });
   }
+});
+
+// GET /api/bank-policies/:brandCode/timeline — parameter-level change history.
+router.get('/:brandCode/timeline', async (req: AuthRequest, res: Response): Promise<void> => {
+  res.json({ timeline: await getPolicyTimeline(req.params.brandCode) });
+});
+
+// POST /api/bank-policies/:brandCode/sensitivity — sweep one scenario input.
+// Body: { scenario: ScenarioInput, variable: 'interestRate'|'deposit'|'targetLoanAmount', steps? }.
+router.post('/:brandCode/sensitivity', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const policy = await getActiveByBrand(req.params.brandCode);
+    if (!policy) { res.status(404).json({ error: 'Policy not found.' }); return; }
+    const variable = (req.body?.variable || 'interestRate') as SensitivityVariable;
+    if (!['interestRate', 'deposit', 'targetLoanAmount'].includes(variable)) { res.status(400).json({ error: 'Invalid variable.' }); return; }
+    const input = sanitizeScenarioInput(req.body?.scenario as ScenarioInput);
+    const steps = Math.min(15, Math.max(3, Number(req.body?.steps) || 7));
+    res.json(sensitivity(input, policy, variable, steps));
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : 'Could not run sensitivity analysis.' });
+  }
+});
+
+// POST /api/bank-policies/:brandCode/rollback/:versionId — revert to a prior version.
+router.post('/:brandCode/rollback/:versionId', policyMutationLimiter, async (req: AuthRequest, res: Response): Promise<void> => {
+  const target = await getVersionById(req.params.versionId);
+  if (!target || target.brandCode !== req.params.brandCode) { res.status(404).json({ error: 'Version not found for this bank.' }); return; }
+  const updated = await rollbackToVersion(req.params.versionId, req.user!.email);
+  res.json({ policy: updated });
 });
 
 // GET /api/bank-policies/:brandCode/summary — Word-style summary for one bank.
@@ -204,7 +315,7 @@ router.get('/:brandCode/versions', async (req: AuthRequest, res: Response): Prom
 });
 
 // POST /api/bank-policies/:brandCode/version — save an edited policy as a new version.
-router.post('/:brandCode/version', async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/:brandCode/version', policyMutationLimiter, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const policy = req.body?.policy as BankPolicy;
     const activate = !!req.body?.activate;

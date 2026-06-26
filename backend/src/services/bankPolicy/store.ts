@@ -10,6 +10,8 @@
 import { prisma } from '../../lib/prisma';
 import { BankPolicy } from './types';
 import { BANK_POLICIES_2026, POLICY_SEED_VERSION } from './policies';
+import { computePolicyHash, verifyIntegrity, IntegrityResult } from './integrity';
+import { diffPolicies, PolicyChange } from './policyDiff';
 
 // prisma client is untyped in this sandbox (no `prisma generate`); cast so the
 // new models compile. Types are real once generated on deploy.
@@ -53,7 +55,7 @@ export async function ensureSeed(): Promise<void> {
         isActive: true,
         effectiveFrom: new Date(p.effectiveFrom),
         notes: p.notes,
-        policyJson: JSON.stringify({ ...p, seedVersion: POLICY_SEED_VERSION }),
+        policyJson: JSON.stringify({ ...p, seedVersion: POLICY_SEED_VERSION, _integrity: computePolicyHash(p) }),
       },
     });
     await audit(p.brandCode, firstSeed ? 'SEED' : 'RESYNC', `${firstSeed ? 'Seeded' : 'Re-synced to'} ${p.policyVersion} (${POLICY_SEED_VERSION})`);
@@ -122,7 +124,7 @@ export async function createVersion(policy: BankPolicy, opts: { activate?: boole
       isActive: !!opts.activate,
       effectiveFrom: new Date(policy.effectiveFrom || new Date().toISOString()),
       notes: policy.notes ?? null,
-      policyJson: JSON.stringify(policy),
+      policyJson: JSON.stringify({ ...policy, _integrity: computePolicyHash(policy) }),
       createdByEmail: opts.actorEmail ?? null,
     },
   });
@@ -153,4 +155,116 @@ export async function listAudit(brandCode?: string, limit = 100): Promise<Array<
     orderBy: { createdAt: 'desc' },
     take: limit,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Feature: Policy change timeline (parameter-level diffs between versions)
+// ---------------------------------------------------------------------------
+
+export interface PolicyTimelineEntry {
+  id: string;
+  policyVersion: string;
+  effectiveFrom: Date;
+  createdAt: Date;
+  createdByEmail: string | null;
+  isActive: boolean;
+  isSeed: boolean;
+  changeCount: number;
+  changes: PolicyChange[];
+}
+
+/**
+ * Chronological history for a bank (newest first). Each entry lists the
+ * parameter-level changes vs the immediately preceding version, so reviewers
+ * can see exactly what moved, when, and by whom.
+ */
+export async function getPolicyTimeline(brandCode: string): Promise<PolicyTimelineEntry[]> {
+  await ensureSeed();
+  const rows: VersionRow[] = await db.bankPolicyVersion.findMany({ where: { brandCode }, orderBy: { createdAt: 'asc' } });
+  const parsed = rows.map(parse);
+  const entries: PolicyTimelineEntry[] = rows.map((row, i) => {
+    const changes = diffPolicies(i > 0 ? parsed[i - 1] : null, parsed[i]);
+    return {
+      id: row.id,
+      policyVersion: row.policyVersion,
+      effectiveFrom: row.effectiveFrom,
+      createdAt: row.createdAt,
+      createdByEmail: row.createdByEmail,
+      isActive: row.isActive,
+      isSeed: i === 0,
+      changeCount: changes.length,
+      changes,
+    };
+  });
+  return entries.reverse(); // newest first
+}
+
+/** Diff any two versions by id (order-independent: returns from -> to). */
+export async function diffVersions(fromId: string, toId: string): Promise<{ from: BankPolicy; to: BankPolicy; changes: PolicyChange[] } | null> {
+  const [from, to] = await Promise.all([getVersionById(fromId), getVersionById(toId)]);
+  if (!from || !to) return null;
+  return { from, to, changes: diffPolicies(from, to) };
+}
+
+// ---------------------------------------------------------------------------
+// Feature: tamper-evident integrity verification
+// ---------------------------------------------------------------------------
+
+export interface VersionIntegrity extends IntegrityResult { id: string; brandCode: string; policyVersion: string }
+
+/** Recompute the stored version's hash and compare to the embedded one. */
+export async function verifyVersionIntegrity(id: string): Promise<VersionIntegrity | null> {
+  const row: VersionRow | null = await db.bankPolicyVersion.findUnique({ where: { id } });
+  if (!row) return null;
+  const raw = JSON.parse(row.policyJson) as Record<string, unknown>;
+  return { id: row.id, brandCode: row.brandCode, policyVersion: row.policyVersion, ...verifyIntegrity(raw) };
+}
+
+/** Verify integrity across all active policies (compliance sweep). */
+export async function verifyActiveIntegrity(): Promise<VersionIntegrity[]> {
+  await ensureSeed();
+  const rows: VersionRow[] = await db.bankPolicyVersion.findMany({ where: { isActive: true } });
+  return rows.map((row) => {
+    const raw = JSON.parse(row.policyJson) as Record<string, unknown>;
+    return { id: row.id, brandCode: row.brandCode, policyVersion: row.policyVersion, ...verifyIntegrity(raw) };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Feature: rollback + library backup / restore
+// ---------------------------------------------------------------------------
+
+/** Activate a prior version, recorded distinctly as a ROLLBACK in the audit log. */
+export async function rollbackToVersion(id: string, actorEmail?: string): Promise<BankPolicy | null> {
+  const row: VersionRow | null = await db.bankPolicyVersion.findUnique({ where: { id } });
+  if (!row) return null;
+  await db.bankPolicyVersion.updateMany({ where: { brandCode: row.brandCode }, data: { isActive: false } });
+  const updated: VersionRow = await db.bankPolicyVersion.update({ where: { id }, data: { isActive: true } });
+  await audit(row.brandCode, 'ROLLBACK', `Rolled back to ${row.policyVersion}`, actorEmail);
+  return parse(updated);
+}
+
+export interface LibrarySnapshot {
+  exportedAt: string;
+  seedVersion: string;
+  policies: BankPolicy[];
+}
+
+/** Full point-in-time snapshot of all active policies (for backup / DR). */
+export async function exportLibrary(): Promise<LibrarySnapshot> {
+  const policies = await getActivePolicies();
+  return { exportedAt: new Date().toISOString(), seedVersion: POLICY_SEED_VERSION, policies };
+}
+
+/** Restore policies from a snapshot, each saved as a new ACTIVE version. */
+export async function restoreLibrary(snapshot: LibrarySnapshot, actorEmail?: string): Promise<{ restored: number }> {
+  await ensureSeed();
+  let restored = 0;
+  for (const policy of snapshot.policies || []) {
+    if (!policy?.brandCode) continue;
+    await createVersion({ ...policy, policyVersion: `${policy.policyVersion}+restore-${new Date().toISOString().slice(0, 10)}` }, { activate: true, actorEmail });
+    await audit(policy.brandCode, 'RESTORE', `Restored from snapshot ${snapshot.exportedAt}`, actorEmail);
+    restored++;
+  }
+  return { restored };
 }

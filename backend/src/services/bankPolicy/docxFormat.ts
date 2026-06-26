@@ -51,9 +51,9 @@ const PRODUCT_PARAM_SPECS: ParamSpec[] = [
   { path: 'expenseTreatmentRules.treatClientDeclaredAsFloor', label: 'Treat declared expenses as floor', type: 'bool' },
 
   { path: 'debtTreatmentRules.creditCardRepaymentPctOfLimit', label: 'Credit card % of limit / mo', type: 'pct' },
-  { path: 'debtTreatmentRules.personalLoanRepaymentCalc', label: 'Personal loan calc', type: 'enum', enumValues: ['actual', 'buffered'] },
-  { path: 'debtTreatmentRules.carLoanRepaymentCalc', label: 'Car loan calc', type: 'enum', enumValues: ['actual', 'buffered'] },
-  { path: 'debtTreatmentRules.hecsHelpTreatment', label: 'HECS/HELP treatment', type: 'enum', enumValues: ['actual', 'aboveThreshold', 'ignored'] },
+  { path: 'debtTreatmentRules.personalLoanRepaymentCalc', label: 'Personal loan calc', type: 'enum', enumValues: ['actual', 'assumedAmortising'] },
+  { path: 'debtTreatmentRules.carLoanRepaymentCalc', label: 'Car loan calc', type: 'enum', enumValues: ['actual', 'assumedAmortising'] },
+  { path: 'debtTreatmentRules.hecsHelpTreatment', label: 'HECS/HELP treatment', type: 'enum', enumValues: ['actual', 'taxTable', 'ignoreBelowThreshold'] },
   { path: 'debtTreatmentRules.otherLoanRepaymentCalc', label: 'Other loan calc', type: 'enum', enumValues: ['actual', 'buffered'] },
   { path: 'debtTreatmentRules.maxInterestOnlyYears', label: 'Max interest-only years', type: 'int' },
 
