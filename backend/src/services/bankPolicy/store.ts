@@ -9,7 +9,7 @@
 
 import { prisma } from '../../lib/prisma';
 import { BankPolicy } from './types';
-import { BANK_POLICIES_2026 } from './policies';
+import { BANK_POLICIES_2026, POLICY_SEED_VERSION } from './policies';
 
 // prisma client is untyped in this sandbox (no `prisma generate`); cast so the
 // new models compile. Types are real once generated on deploy.
@@ -22,11 +22,29 @@ async function audit(brandCode: string, action: string, detail: string, actorEma
   } catch { /* audit is best-effort */ }
 }
 
-/** Seed the library from code on first use (idempotent). */
+// Re-sync guard: only re-check the DB once per process (reset on deploy).
+let synced = false;
+
+/**
+ * Seed / re-sync the library from code. On first run it seeds every bank; on
+ * later deploys, if POLICY_SEED_VERSION has changed, each bank gets a fresh
+ * ACTIVE version from code (older versions are deactivated but kept as history).
+ * Idempotent: a no-op once the current seed version is present for every bank.
+ */
 export async function ensureSeed(): Promise<void> {
-  const count = await db.bankPolicyVersion.count();
-  if (count > 0) return;
+  if (synced) return;
   for (const p of BANK_POLICIES_2026) {
+    const rows: VersionRow[] = await db.bankPolicyVersion.findMany({ where: { brandCode: p.brandCode } });
+    const hasCurrent = rows.some((r) => {
+      try { return (JSON.parse(r.policyJson) as { seedVersion?: string }).seedVersion === POLICY_SEED_VERSION; }
+      catch { return false; }
+    });
+    if (hasCurrent) continue;
+
+    const firstSeed = rows.length === 0;
+    if (!firstSeed) {
+      await db.bankPolicyVersion.updateMany({ where: { brandCode: p.brandCode }, data: { isActive: false } });
+    }
     await db.bankPolicyVersion.create({
       data: {
         brandCode: p.brandCode,
@@ -35,11 +53,12 @@ export async function ensureSeed(): Promise<void> {
         isActive: true,
         effectiveFrom: new Date(p.effectiveFrom),
         notes: p.notes,
-        policyJson: JSON.stringify(p),
+        policyJson: JSON.stringify({ ...p, seedVersion: POLICY_SEED_VERSION }),
       },
     });
-    await audit(p.brandCode, 'SEED', `Seeded ${p.policyVersion}`);
+    await audit(p.brandCode, firstSeed ? 'SEED' : 'RESYNC', `${firstSeed ? 'Seeded' : 'Re-synced to'} ${p.policyVersion} (${POLICY_SEED_VERSION})`);
   }
+  synced = true;
 }
 
 interface VersionRow {

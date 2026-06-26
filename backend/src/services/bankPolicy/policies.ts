@@ -168,3 +168,10 @@ export const BANK_POLICIES_2026: BankPolicy[] = [
 export function getActivePolicies(): BankPolicy[] {
   return BANK_POLICIES_2026.filter((p) => p.isActive);
 }
+
+/**
+ * Bump this whenever the hard-coded policy VALUES change. On deploy, the
+ * DB-backed library re-syncs each bank to a fresh active version when its
+ * stored seedVersion differs from this — older versions are kept as history.
+ */
+export const POLICY_SEED_VERSION = '2026.2';
