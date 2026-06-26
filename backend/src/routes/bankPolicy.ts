@@ -8,6 +8,11 @@ import {
   ensureSeed, listVersions, getActivePolicies, getActiveByBrand, getVersionById,
   listVersionsForBrand, createVersion, activateVersion, cloneVersion, listAudit,
 } from '../services/bankPolicy/store';
+import {
+  buildBankSummary, buildAllSummaries, renderMarkdown, renderWordHtml,
+} from '../services/bankPolicy/summaries';
+import { explainRecommendations } from '../services/bankPolicy/explain';
+import { matchBanksForScenario } from '../services/bankPolicy/match';
 
 /**
  * 2026 Bank Policy Library API (admin). DB-backed with version history + audit.
@@ -41,9 +46,58 @@ router.post('/rank', async (req: AuthRequest, res: Response): Promise<void> => {
       return;
     }
     const policies = await getActivePolicies();
-    res.json({ recommendations: rankBanksForScenario(input, policies) });
+    const recommendations = rankBanksForScenario(input, policies);
+    // Feature B: attach a broker-facing explanation to each recommendation.
+    const explanations = explainRecommendations(recommendations, input.scenario, policies);
+    res.json({ recommendations, explanations });
   } catch {
     res.status(500).json({ error: 'Could not rank banks for this scenario.' });
+  }
+});
+
+// ===========================================================================
+// Feature A — Word-style policy summaries (generated from the active configs).
+// ===========================================================================
+
+// GET /api/bank-policies/summaries — structured docs for every bank + comparison.
+router.get('/summaries', async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const policies = await getActivePolicies();
+    res.json(buildAllSummaries(policies));
+  } catch {
+    res.status(500).json({ error: 'Could not build policy summaries.' });
+  }
+});
+
+// GET /api/bank-policies/summaries/word — download the full library as a Word (.doc) file.
+router.get('/summaries/word', async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const policies = await getActivePolicies();
+    const html = renderWordHtml(policies);
+    res.setHeader('Content-Type', 'application/msword');
+    res.setHeader('Content-Disposition', 'attachment; filename="2026-bank-lending-policy-summaries.doc"');
+    res.send(html);
+  } catch {
+    res.status(500).json({ error: 'Could not generate the Word document.' });
+  }
+});
+
+// ===========================================================================
+// Feature D — experimental scenario matching (pattern + semantic → engine).
+// ===========================================================================
+
+// POST /api/bank-policies/match — Algorithm B shortlist feeding Algorithm A.
+router.post('/match', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const input = req.body as ScenarioInput;
+    if (!input?.scenario || !Array.isArray(input?.incomeSources)) {
+      res.status(400).json({ error: 'A scenario, incomeSources, expenses, properties and debts are required.' });
+      return;
+    }
+    const policies = await getActivePolicies();
+    res.json(matchBanksForScenario(input, policies));
+  } catch {
+    res.status(500).json({ error: 'Could not match banks for this scenario.' });
   }
 });
 
@@ -68,6 +122,14 @@ router.get('/version/:id', async (req: AuthRequest, res: Response): Promise<void
   const policy = await getVersionById(req.params.id);
   if (!policy) { res.status(404).json({ error: 'Version not found.' }); return; }
   res.json({ policy });
+});
+
+// GET /api/bank-policies/:brandCode/summary — Word-style summary for one bank.
+router.get('/:brandCode/summary', async (req: AuthRequest, res: Response): Promise<void> => {
+  const policy = await getActiveByBrand(req.params.brandCode);
+  if (!policy) { res.status(404).json({ error: 'Policy not found.' }); return; }
+  const doc = buildBankSummary(policy);
+  res.json({ doc, markdown: renderMarkdown(doc) });
 });
 
 // GET /api/bank-policies/:brandCode — active policy for a bank (full JSON).

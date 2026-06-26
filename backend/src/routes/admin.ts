@@ -6,6 +6,8 @@ import { prisma } from '../lib/prisma';
 import { computePropertyGrowth } from '../services/servicing';
 import { rankBanksForScenario } from '../services/bankPolicy/ranking';
 import { getActivePolicies } from '../services/bankPolicy/policies';
+import { explainRecommendations } from '../services/bankPolicy/explain';
+import { matchBanksForScenario } from '../services/bankPolicy/match';
 import { ScenarioInput, Frequency } from '../services/bankPolicy/types';
 import { ensureTimeline, activateNextUpcoming, TOTAL_STAGES } from '../lib/timeline';
 
@@ -648,9 +650,16 @@ router.get('/clients/:id/bank-recommendations', async (req: AuthRequest, res: Re
       return;
     }
     const input = buildScenarioFromClient(client.clientProfile, (client as any).loanScenarios || []);
-    const all = rankBanksForScenario(input, getActivePolicies());
+    const policies = getActivePolicies();
+    const all = rankBanksForScenario(input, policies);
+    // Feature B: broker-facing explanation per lender (keyed by brandCode).
+    const explanations = explainRecommendations(all, input.scenario, policies);
+    const explanationByBrand: Record<string, unknown> = {};
+    for (const e of explanations) explanationByBrand[e.brandCode] = e;
+    // Feature D (experimental): include the pattern + semantic match when asked.
+    const match = req.query.match === '1' ? matchBanksForScenario(input, policies) : undefined;
     audit('client.bank-recommendations', { adminEmail: req.user!.email, clientId: req.params.id, top: all.slice(0, 3).map((r) => r.brandCode) });
-    res.json({ scenarioUsed: input.scenario, top3: all.slice(0, 3), all });
+    res.json({ scenarioUsed: input.scenario, top3: all.slice(0, 3), all, explanations: explanationByBrand, match });
   } catch (error) {
     res.status(500).json({ error: 'Could not compute bank recommendations.' });
   }
