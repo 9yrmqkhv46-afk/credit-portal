@@ -519,3 +519,35 @@ model Attachment {
   status             String   @default("Uploaded")
   createdAt          DateTime @default(now())
 }
+
+
+
+// ===========================================================================
+// 2026 Bank Policy Library (versioned + audited)
+// ===========================================================================
+// Each row is one immutable policy version for a bank. The full BankPolicy is
+// stored as JSON (policyJson) so the engine/ranking run without hard-coding.
+// One active version per brandCode is used for new calculations.
+model BankPolicyVersion {
+  id             String   @id @default(uuid())
+  brandCode      String
+  bankName       String
+  policyVersion  String
+  isActive       Boolean  @default(false)
+  effectiveFrom  DateTime @default(now())
+  notes          String?
+  policyJson     String
+  createdByEmail String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// action: SEED | CREATE_VERSION | EDIT | ACTIVATE | CLONE
+model BankPolicyAudit {
+  id         String   @id @default(uuid())
+  brandCode  String
+  action     String
+  detail     String?
+  actorEmail String?
+  createdAt  DateTime @default(now())
+}

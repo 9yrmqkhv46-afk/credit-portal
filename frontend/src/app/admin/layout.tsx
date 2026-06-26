@@ -24,6 +24,15 @@ const NAV: ShellNavItem[] = [
       </svg>
     ),
   },
+  {
+    href: '/admin/bank-policies',
+    label: 'Bank Policies 2026',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-5 w-5">
+        <path d="M12 2L2 7v2h20V7L12 2zM4 11v7H3v2h18v-2h-1v-7h-2v7h-3v-7h-2v7h-2v-7H9v7H6v-7H4z" />
+      </svg>
+    ),
+  },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
