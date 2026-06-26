@@ -19,6 +19,10 @@ import { buildPolicyDocx, buildLibraryDocx } from '../services/bankPolicy/docxEx
 import { importPolicyDocx } from '../services/bankPolicy/docxImport';
 import { validatePolicy, previewImpact, sensitivity, SensitivityVariable } from '../services/bankPolicy/policyImpact';
 import { decodeBase64Upload, sanitizeScenarioInput, createRateLimiter } from '../services/bankPolicy/security';
+import { maxPurchasePrice, estimateUpfrontCosts, estimateLmi, AuState } from '../services/bankPolicy/affordability';
+import { buildAmortizationSchedule, comparisonRate, rateShockStress, borrowingConfidenceBand } from '../services/bankPolicy/loanMath';
+import { suggestPathToApproval, buildComparisonReport } from '../services/bankPolicy/advisory';
+import { runBacktest } from '../services/bankPolicy/backtest';
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -95,6 +99,47 @@ router.get('/diff', async (req: AuthRequest, res: Response): Promise<void> => {
   const result = await diffVersions(from, to);
   if (!result) { res.status(404).json({ error: 'One or both versions were not found.' }); return; }
   res.json({ changes: result.changes, fromVersion: result.from.policyVersion, toVersion: result.to.policyVersion });
+});
+
+// GET /api/bank-policies/backtest — run the canonical scenario matrix across all banks.
+router.get('/backtest', async (_req: AuthRequest, res: Response): Promise<void> => {
+  const policies = await getActivePolicies();
+  res.json(runBacktest(policies));
+});
+
+// POST /api/bank-policies/compare — one scenario across every bank, side by side.
+router.post('/compare', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const input = sanitizeScenarioInput(req.body as ScenarioInput);
+    const policies = await getActivePolicies();
+    res.json(buildComparisonReport(input, policies));
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : 'Could not build comparison.' });
+  }
+});
+
+// POST /api/bank-policies/costs — modelled stamp duty + LMI + upfront costs.
+// Body: { state, price, loanAmount?, isInvestment? }
+router.post('/costs', async (req: AuthRequest, res: Response): Promise<void> => {
+  const state = String(req.body?.state || 'NSW').toUpperCase() as AuState;
+  const price = Number(req.body?.price) || 0;
+  const loanAmount = Number(req.body?.loanAmount) || 0;
+  const isInvestment = !!req.body?.isInvestment;
+  const upfront = estimateUpfrontCosts(state, price, { isInvestment });
+  const lmi = estimateLmi(loanAmount, price);
+  res.json({ state, price, upfront, lmiPremium: lmi, totalAcquisitionCost: upfront.total + lmi });
+});
+
+// POST /api/bank-policies/amortization — repayment schedule + comparison rate.
+// Body: { principal, annualRate, termYears, ioYears?, fees? }
+router.post('/amortization', async (req: AuthRequest, res: Response): Promise<void> => {
+  const principal = Number(req.body?.principal) || 0;
+  const annualRate = Number(req.body?.annualRate) || 0;
+  const termYears = Math.min(40, Math.max(1, Number(req.body?.termYears) || 30));
+  const ioYears = Math.max(0, Number(req.body?.ioYears) || 0);
+  const fees = req.body?.fees || {};
+  const schedule = buildAmortizationSchedule(principal, annualRate, termYears, { ioYears, sampleEvery: 12 });
+  res.json({ ...schedule, comparisonRate: comparisonRate(principal, annualRate, termYears, fees) });
 });
 
 // POST /api/bank-policies/rank — rank all active banks for a scenario.
@@ -290,6 +335,59 @@ router.post('/:brandCode/rollback/:versionId', policyMutationLimiter, async (req
   if (!target || target.brandCode !== req.params.brandCode) { res.status(404).json({ error: 'Version not found for this bank.' }); return; }
   const updated = await rollbackToVersion(req.params.versionId, req.user!.email);
   res.json({ policy: updated });
+});
+
+// POST /api/bank-policies/:brandCode/affordability — max purchase price for a buyer.
+// Body: { scenario: ScenarioInput, savings, state, purpose? }
+router.post('/:brandCode/affordability', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const policy = await getActiveByBrand(req.params.brandCode);
+    if (!policy) { res.status(404).json({ error: 'Policy not found.' }); return; }
+    const input = sanitizeScenarioInput(req.body?.scenario as ScenarioInput);
+    const savings = Math.max(0, Number(req.body?.savings) || 0);
+    const state = String(req.body?.state || 'NSW').toUpperCase() as AuState;
+    res.json(maxPurchasePrice(input, policy, { savings, state }));
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : 'Could not compute affordability.' });
+  }
+});
+
+// POST /api/bank-policies/:brandCode/stress — APRA-style rate-shock test.
+router.post('/:brandCode/stress', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const policy = await getActiveByBrand(req.params.brandCode);
+    if (!policy) { res.status(404).json({ error: 'Policy not found.' }); return; }
+    const input = sanitizeScenarioInput(req.body?.scenario as ScenarioInput);
+    const shockBps = Math.min(1000, Math.max(0, Number(req.body?.shockBps) || 300));
+    res.json(rateShockStress(input, policy, shockBps));
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : 'Could not run the stress test.' });
+  }
+});
+
+// POST /api/bank-policies/:brandCode/confidence — borrowing-power confidence band.
+router.post('/:brandCode/confidence', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const policy = await getActiveByBrand(req.params.brandCode);
+    if (!policy) { res.status(404).json({ error: 'Policy not found.' }); return; }
+    const input = sanitizeScenarioInput(req.body?.scenario as ScenarioInput);
+    const swing = Math.min(0.4, Math.max(0.01, Number(req.body?.swing) || 0.1));
+    res.json(borrowingConfidenceBand(input, policy, swing));
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : 'Could not compute the confidence band.' });
+  }
+});
+
+// POST /api/bank-policies/:brandCode/optimize — actionable path to approval.
+router.post('/:brandCode/optimize', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const policy = await getActiveByBrand(req.params.brandCode);
+    if (!policy) { res.status(404).json({ error: 'Policy not found.' }); return; }
+    const input = sanitizeScenarioInput(req.body?.scenario as ScenarioInput);
+    res.json(suggestPathToApproval(input, policy));
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : 'Could not compute suggestions.' });
+  }
 });
 
 // GET /api/bank-policies/:brandCode/summary — Word-style summary for one bank.

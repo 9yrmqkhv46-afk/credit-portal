@@ -40,6 +40,20 @@ export {
   validateDocxUpload, decodeBase64Upload, sanitizeScenarioInput, createRateLimiter, MAX_DOCX_BYTES,
 } from './security';
 
+// Buyer-side calculators & analytics (pure, Prisma-free).
+export {
+  estimateStampDuty, estimateLmi, estimateUpfrontCosts, maxPurchasePrice,
+} from './affordability';
+export type { AuState, UpfrontCosts, MaxPurchaseResult } from './affordability';
+export {
+  buildAmortizationSchedule, comparisonRate, rateShockStress, borrowingConfidenceBand,
+} from './loanMath';
+export type { AmortizationResult, AmortRow, RateShockResult, ConfidenceBand } from './loanMath';
+export { suggestPathToApproval, buildComparisonReport } from './advisory';
+export type { ApprovalSuggestion, ComparisonReport, ComparisonRow } from './advisory';
+export { runBacktest, diffBacktest } from './backtest';
+export type { BacktestReport, BacktestCell, InvariantViolation } from './backtest';
+
 // Feature B — broker-facing explanations.
 export { explainRecommendation, explainRecommendations } from './explain';
 export type { RecommendationExplanation } from './explain';
