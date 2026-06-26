@@ -4,7 +4,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 import { prisma } from '../lib/prisma';
 import { computePropertyGrowth } from '../services/servicing';
-import { rankBanksForScenario } from '../services/bankPolicy/ranking';
+import { rankWithPatternMatching } from '../services/bankPolicy/ranking';
 import { getActivePolicies } from '../services/bankPolicy/policies';
 import { ScenarioInput, Frequency } from '../services/bankPolicy/types';
 import { ensureTimeline, activateNextUpcoming, TOTAL_STAGES } from '../lib/timeline';
@@ -648,11 +648,46 @@ router.get('/clients/:id/bank-recommendations', async (req: AuthRequest, res: Re
       return;
     }
     const input = buildScenarioFromClient(client.clientProfile, (client as any).loanScenarios || []);
-    const all = rankBanksForScenario(input, getActivePolicies());
-    audit('client.bank-recommendations', { adminEmail: req.user!.email, clientId: req.params.id, top: all.slice(0, 3).map((r) => r.brandCode) });
-    res.json({ scenarioUsed: input.scenario, top3: all.slice(0, 3), all });
+    const result = rankWithPatternMatching(input, getActivePolicies());
+    const all = result.recommendations;
+    audit('client.bank-recommendations', { adminEmail: req.user!.email, clientId: req.params.id, patterns: result.patterns, top: all.slice(0, 3).map((r) => r.brandCode) });
+    res.json({ scenarioUsed: input.scenario, patterns: result.patterns, clusterBrandCodes: result.clusterBrandCodes, top3: all.slice(0, 3), all });
   } catch (error) {
     res.status(500).json({ error: 'Could not compute bank recommendations.' });
+  }
+});
+
+// POST /api/admin/clients/:id/bank-recommendations/share — post the top 3 into
+// the client's message thread as a shareable summary.
+router.post('/clients/:id/bank-recommendations/share', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const client = await prisma.user.findFirst({
+      where: { id: req.params.id, role: 'CLIENT' },
+      include: {
+        clientProfile: { include: { incomeSources: true, existingDebts: true, properties: true, expenseSummary: true } },
+        loanScenarios: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+    if (!client || !client.clientProfile) {
+      res.status(404).json({ error: 'Client profile not found.' });
+      return;
+    }
+    const input = buildScenarioFromClient(client.clientProfile, (client as any).loanScenarios || []);
+    const top3 = rankWithPatternMatching(input, getActivePolicies()).recommendations.slice(0, 3);
+    if (top3.length === 0) {
+      res.status(400).json({ error: 'No recommendations to share.' });
+      return;
+    }
+    const medals = ['🥇', '🥈', '🥉'];
+    const lines = top3.map((r, i) => `${medals[i]} ${r.bankName} — up to $${r.calcResult.finalMaxBorrow.toLocaleString()} (${r.calcResult.passFail}). ${r.reasonSummary}`);
+    const body = `Based on your details, the lenders most likely to suit you:\n\n${lines.join('\n\n')}\n\nIndicative modelling only — not a credit decision. Your specialist will confirm the best option.`;
+    await prisma.message.create({
+      data: { clientUserId: req.params.id, senderRole: 'ADMIN', body, type: 'text', status: 'sent' },
+    });
+    audit('client.bank-recommendations.shared', { adminEmail: req.user!.email, clientId: req.params.id, top: top3.map((r) => r.brandCode) });
+    res.status(201).json({ shared: top3.length });
+  } catch (error) {
+    res.status(500).json({ error: 'Could not share recommendations.' });
   }
 });
 
