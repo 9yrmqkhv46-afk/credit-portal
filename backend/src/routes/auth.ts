@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { sendOtpEmail } from '../lib/mailer';
+import { sendOtpEmail, isMailConfigured } from '../lib/mailer';
 
 const router = Router();
 
@@ -145,6 +145,32 @@ function verifyOtp(purpose: OtpPurpose, email: string, code: string): boolean {
 
 export const __otpForTesting = { issueOtp, verifyOtp, reset: () => otpStore.clear() };
 
+/**
+ * Client 2FA is enforced only when it can actually be completed safely:
+ *   - a mail transport is configured (codes are delivered), OR
+ *   - dev mode (codes are surfaced for local testing).
+ * This prevents a production deploy WITHOUT email from locking clients out.
+ */
+function client2faActive(): boolean {
+  return config.requireClient2fa && (isMailConfigured() || config.exposeOtpInDev);
+}
+
+/**
+ * Only expose the OTP in API responses for LOCAL dev with no mailer. Never when
+ * a mail transport is configured, and never in production.
+ */
+function canExposeDevCode(): boolean {
+  return config.exposeOtpInDev && !isMailConfigured();
+}
+
+/** Constant-time string comparison (avoids timing leaks on the shared password). */
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
+}
+
 // ---------------------------------------------------------------------------
 // JWT helper
 // ---------------------------------------------------------------------------
@@ -173,8 +199,8 @@ router.post('/register', async (req: AuthRequest, res: Response): Promise<void> 
     }
 
     // Two-factor: verify the email address via a one-time code before creating
-    // the account. Client requests a code via POST /auth/otp/request first.
-    if (config.requireClient2fa) {
+    // the account. Enforced only when it can be completed (mail configured/dev).
+    if (client2faActive()) {
       const otp = String((req.body?.otp ?? '')).trim();
       if (!otp) {
         res.status(400).json({ error: 'Email verification required. Request a code first.', otpRequired: true });
@@ -248,13 +274,13 @@ router.post('/login', async (req: AuthRequest, res: Response): Promise<void> => 
 
     // Two-factor for CLIENT accounts: password is step 1; an emailed OTP is
     // step 2. Admins are not gated here (they may not have a monitored inbox).
-    if (user.role === 'CLIENT' && config.requireClient2fa) {
+    if (user.role === 'CLIENT' && client2faActive()) {
       const otp = String((req.body?.otp ?? '')).trim();
       if (!otp) {
         const code = issueOtp('LOGIN', user.email);
         try { await sendOtpEmail(user.email, code, 'LOGIN'); } catch { /* best-effort */ }
         const resp: Record<string, unknown> = { otpRequired: true, message: 'Enter the verification code sent to your email.' };
-        if (config.exposeOtpInDev) resp.devCode = code;
+        if (canExposeDevCode()) resp.devCode = code;
         res.json(resp);
         return;
       }
@@ -290,7 +316,7 @@ router.post('/otp/request', async (req: AuthRequest, res: Response): Promise<voi
   const code = issueOtp(purpose, email);
   try { await sendOtpEmail(email, code, purpose); } catch { /* best-effort */ }
   const resp: Record<string, unknown> = { message: 'If the address is valid, a verification code has been sent.' };
-  if (config.exposeOtpInDev) resp.devCode = code; // dev only — never in production
+  if (canExposeDevCode()) resp.devCode = code; // local dev + no mailer only
   res.json(resp);
 });
 
@@ -306,7 +332,7 @@ router.post('/admin-login', async (req: AuthRequest, res: Response): Promise<voi
     if (admins.length === 0) { res.status(401).json({ error: 'No administrator account is provisioned.' }); return; }
 
     // 1) Configured shared password → sign in as the primary admin.
-    if (config.adminSharedPassword && password === config.adminSharedPassword) {
+    if (config.adminSharedPassword && safeEqual(password, config.adminSharedPassword)) {
       const admin = admins[0];
       res.json({ token: generateToken(admin), user: { id: admin.id, email: admin.email, name: admin.name, role: admin.role } });
       return;
