@@ -20,17 +20,36 @@ if (config.smtp.host) {
 }
 
 export function isMailConfigured(): boolean {
-  return transporter !== null;
+  return transporter !== null || !!config.resendApiKey;
 }
 
 export async function sendMail(to: string, subject: string, text: string, html?: string): Promise<void> {
-  if (!transporter) {
-    // Dev fallback — surface the message in logs instead of sending.
-    // eslint-disable-next-line no-console
-    console.log(`\n[mailer:dev] To: ${to}\n[mailer:dev] Subject: ${subject}\n[mailer:dev] ${text}\n`);
+  // 1) HTTP email API (Resend) — no SMTP server required, only an API key.
+  if (config.resendApiKey) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${config.resendApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: config.smtp.from, to, subject, text, html: html ?? undefined }),
+      });
+      if (!res.ok) throw new Error(`Resend API ${res.status}`);
+      return;
+    } catch (err) {
+      // Fall through to SMTP / dev log rather than failing the auth flow.
+      // eslint-disable-next-line no-console
+      console.error('[mailer] Resend send failed, falling back:', err);
+    }
+  }
+
+  // 2) SMTP (nodemailer) when configured.
+  if (transporter) {
+    await transporter.sendMail({ from: config.smtp.from, to, subject, text, html });
     return;
   }
-  await transporter.sendMail({ from: config.smtp.from, to, subject, text, html });
+
+  // 3) Dev fallback — surface the message in logs instead of sending.
+  // eslint-disable-next-line no-console
+  console.log(`\n[mailer:dev] To: ${to}\n[mailer:dev] Subject: ${subject}\n[mailer:dev] ${text}\n`);
 }
 
 /** Send a one-time verification code. */

@@ -68,6 +68,8 @@ export const config = {
     pass: process.env.SMTP_PASS || '',
     from: process.env.MAIL_FROM || 'no-reply@transformbiz.local',
   },
+  // HTTP email API (no SMTP server needed — just an API key over HTTPS).
+  resendApiKey: process.env.RESEND_API_KEY || '',
 };
 
 export const calculatorConfig = {
