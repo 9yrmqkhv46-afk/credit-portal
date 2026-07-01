@@ -100,6 +100,8 @@ function rateLimiter(req: Request, res: Response, next: NextFunction): void {
 // Apply rate limiting to auth endpoints
 app.use('/api/auth/login', rateLimiter);
 app.use('/api/auth/register', rateLimiter);
+app.use('/api/auth/admin-login', rateLimiter);
+app.use('/api/auth/otp/request', rateLimiter);
 
 // Routes
 app.use('/api/auth', authRoutes);

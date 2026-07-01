@@ -50,6 +50,24 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL || 'file:./dev.db',
   jwtExpiresIn: '24h',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+  appName: process.env.APP_NAME || 'TransformBiz',
+  // Shared admin password: when set, anyone who supplies it can sign in as an
+  // administrator via POST /auth/admin-login (in addition to any admin's own
+  // password). Leave unset to disable.
+  adminSharedPassword: process.env.ADMIN_SHARED_PASSWORD || '',
+  // Two-factor (email OTP) for CLIENT registration + login. On by default;
+  // set REQUIRE_CLIENT_2FA=false to disable.
+  requireClient2fa: process.env.REQUIRE_CLIENT_2FA !== 'false',
+  // In non-production, OTP codes are returned in the API response (devCode) so
+  // the flow is usable without a live mail server. NEVER true in production.
+  exposeOtpInDev: process.env.NODE_ENV !== 'production',
+  smtp: {
+    host: process.env.SMTP_HOST || '',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.MAIL_FROM || 'no-reply@transformbiz.local',
+  },
 };
 
 export const calculatorConfig = {

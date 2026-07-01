@@ -16,6 +16,7 @@ import {
 import { explainRecommendations } from '../services/bankPolicy/explain';
 import { matchBanksForScenario } from '../services/bankPolicy/match';
 import { buildPolicyDocx, buildLibraryDocx } from '../services/bankPolicy/docxExport';
+import { buildPolicyPdf } from '../services/bankPolicy/pdfExport';
 import { importPolicyDocx } from '../services/bankPolicy/docxImport';
 import { validatePolicy, previewImpact, sensitivity, SensitivityVariable } from '../services/bankPolicy/policyImpact';
 import { decodeBase64Upload, sanitizeScenarioInput, createRateLimiter } from '../services/bankPolicy/security';
@@ -388,6 +389,17 @@ router.post('/:brandCode/optimize', async (req: AuthRequest, res: Response): Pro
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'Could not compute suggestions.' });
   }
+});
+
+// GET /api/bank-policies/:brandCode/pdf — detailed PDF policy document.
+router.get('/:brandCode/pdf', async (req: AuthRequest, res: Response): Promise<void> => {
+  const policy = await getActiveByBrand(req.params.brandCode);
+  if (!policy) { res.status(404).json({ error: 'Policy not found.' }); return; }
+  const buffer = await buildPolicyPdf(policy);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${policy.brandCode}-2026-lending-policy.pdf"`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(buffer);
 });
 
 // GET /api/bank-policies/:brandCode/summary — Word-style summary for one bank.

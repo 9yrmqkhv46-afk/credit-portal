@@ -19,6 +19,7 @@ export type { PolicyDoc, DocSection, DocTable } from './summaries';
 
 // Editable Word document (.docx) as the source of truth: export + import.
 export { buildPolicyDocx, buildLibraryDocx } from './docxExport';
+export { buildPolicyPdf } from './pdfExport';
 export { importPolicyDocx, extractDocxLines, parseParamLines } from './docxImport';
 export { serializePolicyParams, applyParamsToPolicy, PRODUCT_KEYS } from './docxFormat';
 export type { ParamLine, ApplyResult } from './docxFormat';

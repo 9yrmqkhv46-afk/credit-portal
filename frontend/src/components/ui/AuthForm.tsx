@@ -63,7 +63,7 @@ function FloatingField({
 
 export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.ReactElement {
   const router = useRouter();
-  const { login, logout } = useAuth();
+  const { login, adminLogin } = useAuth();
   const [role, setRole] = useState<RoleTab>(defaultRole);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,7 +72,14 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [wiggle, setWiggle] = useState(false);
+  const [otpStage, setOtpStage] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [devHint, setDevHint] = useState('');
   const cardRef = useRef<HTMLDivElement>(null);
+
+  const changeRole = (r: RoleTab) => {
+    setRole(r); setOtpStage(false); setOtp(''); setDevHint(''); setError('');
+  };
 
   const triggerWiggle = (msg: string) => {
     setError(msg);
@@ -85,22 +92,38 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!email || !password) {
-      triggerWiggle('Please enter both email and password.');
+
+    // Administrators: password-only sign-in (anyone with a valid admin password).
+    if (role === 'ADMIN') {
+      if (!password) { triggerWiggle('Enter the administrator password.'); return; }
+      setLoading(true);
+      try {
+        await adminLogin(password);
+        setSuccess(true);
+        window.setTimeout(() => router.push('/admin'), 480);
+      } catch (err) {
+        const axiosError = err as AxiosError<{ error?: string }>;
+        setLoading(false);
+        triggerWiggle(axiosError.response?.data?.error || 'Invalid administrator password.');
+      }
       return;
     }
+
+    // Clients: password + emailed OTP (two-factor).
+    if (!email || !password) { triggerWiggle('Please enter both email and password.'); return; }
+    if (otpStage && !otp) { triggerWiggle('Enter the 6-digit code sent to your email.'); return; }
     setLoading(true);
     try {
-      const user = await login(email, password);
-      if (role === 'ADMIN' && user.role !== 'ADMIN') {
-        logout();
+      const result = await login(email, password, otpStage ? otp : undefined);
+      if ('otpRequired' in result) {
         setLoading(false);
-        triggerWiggle('These credentials are not authorized for administrator access.');
+        setOtpStage(true);
+        setDevHint(result.devCode ? `Dev code (no mail server): ${result.devCode}` : '');
         return;
       }
       setSuccess(true);
       window.setTimeout(() => {
-        router.push(user.role === 'ADMIN' ? '/admin' : '/dashboard');
+        router.push(result.user.role === 'ADMIN' ? '/admin' : '/dashboard');
       }, 480);
     } catch (err) {
       const axiosError = err as AxiosError<{ error?: string }>;
@@ -159,7 +182,7 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
             type="button"
             role="tab"
             aria-selected={role === 'CLIENT'}
-            onClick={() => setRole('CLIENT')}
+            onClick={() => changeRole('CLIENT')}
             className={`relative z-10 rounded-lg py-2 transition-colors ${role === 'CLIENT' ? 'text-white' : 'text-white/60'}`}
           >
             Client
@@ -168,7 +191,7 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
             type="button"
             role="tab"
             aria-selected={role === 'ADMIN'}
-            onClick={() => setRole('ADMIN')}
+            onClick={() => changeRole('ADMIN')}
             className={`relative z-10 rounded-lg py-2 transition-colors ${role === 'ADMIN' ? 'text-white' : 'text-white/60'}`}
           >
             Admin
@@ -182,10 +205,12 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
         )}
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4" noValidate>
-          <FloatingField id="email" label="Email address" type="email" value={email} onChange={setEmail} autoComplete="email" />
+          {role === 'CLIENT' && (
+            <FloatingField id="email" label="Email address" type="email" value={email} onChange={setEmail} autoComplete="email" />
+          )}
           <FloatingField
             id="password"
-            label="Password"
+            label={role === 'ADMIN' ? 'Administrator password' : 'Password'}
             type={showPw ? 'text' : 'password'}
             value={password}
             onChange={setPassword}
@@ -201,6 +226,12 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
               </button>
             }
           />
+          {role === 'CLIENT' && otpStage && (
+            <div>
+              <FloatingField id="otp" label="6-digit email code" type="text" value={otp} onChange={(v) => setOtp(v.replace(/\D/g, '').slice(0, 6))} autoComplete="one-time-code" />
+              <p className="mt-1.5 text-[11px] text-white/50">We emailed a verification code to {email}. It expires in 10 minutes.{devHint ? ` ${devHint}` : ''}</p>
+            </div>
+          )}
           <button
             type="submit"
             disabled={loading}
@@ -228,7 +259,7 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                 )}
-                {role === 'ADMIN' ? 'Sign In as Administrator' : 'Sign In'}
+                {role === 'ADMIN' ? 'Sign In as Administrator' : otpStage ? 'Verify & sign in' : 'Sign In'}
               </>
             )}
           </button>
@@ -237,7 +268,7 @@ export function AuthForm({ defaultRole = 'CLIENT' }: AuthFormProps): React.React
         <p className="mt-5 text-center text-xs text-white/50">
           {role === 'ADMIN' ? (
             <>Not an admin?{' '}
-              <button type="button" onClick={() => setRole('CLIENT')} className="font-medium text-[#d19900] hover:underline">
+              <button type="button" onClick={() => changeRole('CLIENT')} className="font-medium text-[#d19900] hover:underline">
                 Client sign in
               </button>
             </>

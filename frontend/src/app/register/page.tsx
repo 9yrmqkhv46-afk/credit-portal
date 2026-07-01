@@ -19,11 +19,14 @@ const STRONG_PASSWORD_MESSAGE =
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register } = useAuth();
+  const { register, requestOtp } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpStage, setOtpStage] = useState(false);
+  const [devHint, setDevHint] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -35,12 +38,10 @@ export default function RegisterPage() {
       setError('Please fill in all fields.');
       return;
     }
-
     if (!STRONG_PASSWORD_REGEX.test(password)) {
       setError(STRONG_PASSWORD_MESSAGE);
       return;
     }
-
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -48,13 +49,21 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      await register(name, email, password);
-      // AuthContext already sets the token+role cookies for middleware.
+      // Step 1: request an email verification code.
+      if (!otpStage) {
+        const { devCode } = await requestOtp(email, 'REGISTER');
+        setOtpStage(true);
+        setDevHint(devCode ? `Dev code (no mail server): ${devCode}` : '');
+        setLoading(false);
+        return;
+      }
+      // Step 2: create the account with the code.
+      if (!otp) { setError('Enter the 6-digit code sent to your email.'); setLoading(false); return; }
+      await register(name, email, password, otp);
       router.push('/dashboard');
     } catch (err) {
       const axiosError = err as AxiosError<{ error?: string }>;
       setError(axiosError.response?.data?.error || 'Registration failed. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
@@ -116,8 +125,21 @@ export default function RegisterPage() {
               placeholder="Confirm your password"
               required
             />
+            {otpStage && (
+              <div>
+                <Input
+                  label="Email verification code"
+                  type="text"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="6-digit code"
+                  required
+                />
+                <p className="mt-1.5 text-xs text-secondary">We sent a code to {email}. It expires in 10 minutes.{devHint ? ` ${devHint}` : ''}</p>
+              </div>
+            )}
             <Button type="submit" loading={loading} className="w-full">
-              Create Account
+              {otpStage ? 'Verify email & create account' : 'Send verification code'}
             </Button>
           </form>
         </div>

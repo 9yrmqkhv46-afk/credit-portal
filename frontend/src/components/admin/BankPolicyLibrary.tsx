@@ -21,6 +21,26 @@ const PRODUCTS = [
 
 const SELECTION = ['topByEquity', 'topByLoanBalance', 'all'].map((v) => ({ value: v, label: v }));
 const money = (n: number) => `$${Math.round(n || 0).toLocaleString()}`;
+const pctv = (n: number) => `${Math.round((n || 0) * 100)}%`;
+const yn = (b: boolean) => (b ? 'Yes' : 'No');
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+/** A labelled group of read-only policy values. */
+function DetailGroup({ title, rows }: { title: string; rows: Array<[string, string]> }) {
+  return (
+    <div className="rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/8">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-teal">{title}</p>
+      <dl className="space-y-1">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex justify-between gap-3 text-sm">
+            <dt className="text-secondary">{k}</dt>
+            <dd className="tnum font-medium text-primary">{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
 
 function sampleScenario() {
   return {
@@ -118,6 +138,20 @@ export function BankPolicyLibrary() {
     }
   };
 
+  /** Download a policy artefact (PDF / Word) for the selected bank. */
+  const download = async (path: string, filename: string, mime: string) => {
+    try {
+      const res = await api.get(path, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: mime }));
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast('Download failed', { accent: 'crimson' });
+    }
+  };
+
   const filtered = versions.filter((v) =>
     (!activeOnly || v.isActive) &&
     (!filter || v.bankName.toLowerCase().includes(filter.toLowerCase()) || v.brandCode.toLowerCase().includes(filter.toLowerCase())),
@@ -162,8 +196,10 @@ export function BankPolicyLibrary() {
             <div className="glass-2 rounded-2xl p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-display text-base font-semibold text-primary">{parsed?.bankName} <span className="text-xs text-muted">{parsed?.policyVersion}</span></h3>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={runTest} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-brand ring-1 ring-brand/40 hover:bg-brand-light">Test with sample scenario</button>
+                  <button type="button" onClick={() => parsed && download(`/bank-policies/${parsed.brandCode}/pdf`, `${parsed.brandCode}-2026-lending-policy.pdf`, 'application/pdf')} className="rounded-lg bg-gradient-to-br from-brand to-brand-dark px-3 py-1.5 text-xs font-semibold text-on-accent hover:brightness-110">Download PDF</button>
+                  <button type="button" onClick={() => parsed && download(`/bank-policies/${parsed.brandCode}/docx`, `${parsed.brandCode}-2026-lending-policy.docx`, DOCX_MIME)} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-secondary ring-1 ring-white/15 hover:bg-white/10">Download Word</button>
                   <button type="button" onClick={clone} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-secondary ring-1 ring-white/15 hover:bg-white/10">Clone</button>
                 </div>
               </div>
@@ -205,20 +241,66 @@ export function BankPolicyLibrary() {
               )}
             </div>
 
-            {/* JSON preview / editor */}
-            <div className="glass-2 rounded-2xl p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-sm font-semibold text-primary">Structured policy JSON {jsonValid ? <span className="text-xs text-emerald">valid</span> : <span className="text-xs text-crimson">invalid</span>}</p>
+            {/* Readable policy detail (replaces the raw JSON editor) */}
+            {prod && (
+              <div className="glass-2 rounded-2xl p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-primary">Policy detail — {PRODUCTS.find((x) => x.key === productTab)?.label}</p>
+                  <span className="text-xs text-muted">Adjust values above, or edit the full policy in the “Edit in Word” tab.</span>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <DetailGroup title="Caps & assessment" rows={[
+                    ['Max LVR', pctv(prod.maxLvr)],
+                    ['Max DTI', `${prod.maxDti}x`],
+                    ['Serviceability buffer', `${(prod.serviceabilityBufferBps / 100).toFixed(2)}%`],
+                    ['Base assessment rate', pctv(prod.baseRateAssumption)],
+                    ['Loan range', `${money(prod.minLoanAmount)} – ${money(prod.maxLoanAmount)}`],
+                    ['Term range', `${prod.minTermYears}–${prod.maxTermYears} yrs`],
+                  ]} />
+                  <DetailGroup title="Income treatment" rows={[
+                    ['Primary salary', pctv(prod.incomeShadingRules.salaryPrimary.acceptPct)],
+                    ['Secondary / bonus', pctv(prod.incomeShadingRules.salarySecondary.acceptPct)],
+                    ['Rental accepted', pctv(prod.incomeShadingRules.rental.acceptPct)],
+                    ['Rental vacancy', pctv(prod.incomeShadingRules.rental.vacancyFactorPct)],
+                    ['Business income', `${pctv(prod.incomeShadingRules.businessIncome.acceptPct)} (${prod.incomeShadingRules.businessIncome.minYearsFinancials}yr)`],
+                    ['Govt / other', `${pctv(prod.incomeShadingRules.govBenefits.acceptPct)} / ${pctv(prod.incomeShadingRules.other.acceptPct)}`],
+                  ]} />
+                  <DetailGroup title="Expenses" rows={[
+                    ['Uses HEM floor', yn(prod.expenseTreatmentRules.useHem)],
+                    ['Min / adult / mo', money(prod.expenseTreatmentRules.minLivingExpensePerAdult)],
+                    ['Min / child / mo', money(prod.expenseTreatmentRules.minLivingExpensePerChild)],
+                    ['Declared as floor', yn(prod.expenseTreatmentRules.treatClientDeclaredAsFloor)],
+                  ]} />
+                  <DetailGroup title="Debt treatment" rows={[
+                    ['Credit card % of limit', pctv(prod.debtTreatmentRules.creditCardRepaymentPctOfLimit)],
+                    ['Personal loan', String(prod.debtTreatmentRules.personalLoanRepaymentCalc)],
+                    ['Car loan', String(prod.debtTreatmentRules.carLoanRepaymentCalc)],
+                    ['HECS/HELP', String(prod.debtTreatmentRules.hecsHelpTreatment)],
+                    ['Other loans', String(prod.debtTreatmentRules.otherLoanRepaymentCalc)],
+                  ]} />
+                  <DetailGroup title="Property & portfolio" rows={[
+                    ['Max properties', String(prod.propertyTreatmentRules.maxPropertiesConsidered)],
+                    ['Selection', String(prod.propertyTreatmentRules.selectionStrategy)],
+                    ['Include investment', yn(prod.propertyTreatmentRules.includeInvestmentPropertiesInCalc)],
+                    ['Include commercial', yn(prod.propertyTreatmentRules.includeCommercialPropertiesInCalc)],
+                  ]} />
+                  <DetailGroup title="Interest-only & gearing" rows={[
+                    ['IO allowed', yn(!!prod.interestOnlyTreatment?.allowed)],
+                    ['Max IO years', String(prod.interestOnlyTreatment?.maxIoYears ?? 0)],
+                    ['IO rate loading', `${((prod.interestOnlyTreatment?.ioAssessmentRateLoadingBps ?? 0) / 100).toFixed(2)}%`],
+                    ['Neg. gearing benefit', yn(!!prod.negativeGearingTreatment?.allowNegativeGearingBenefit)],
+                  ]} />
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-white/10 pt-3">
+                  <label className="text-xs text-muted">New version label
+                    <input className={numField} placeholder={parsed?.policyVersion} value={newVersionLabel} onChange={(e) => setNewVersionLabel(e.target.value)} />
+                  </label>
+                  <button type="button" disabled={!jsonValid} onClick={() => saveNewVersion(false)} className="rounded-xl px-4 py-2 text-sm font-semibold text-secondary ring-1 ring-white/15 hover:bg-white/10 disabled:opacity-50">Save as new version</button>
+                  <button type="button" disabled={!jsonValid} onClick={() => saveNewVersion(true)} className="rounded-xl bg-gradient-to-br from-brand to-brand-dark px-4 py-2 text-sm font-semibold text-on-accent hover:brightness-110 disabled:opacity-50">Save &amp; activate</button>
+                </div>
               </div>
-              <textarea value={jsonText} onChange={(e) => setJsonText(e.target.value)} spellCheck={false} className="glass-input h-72 w-full rounded-xl border border-white/15 px-3 py-2 font-mono text-xs text-primary focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" />
-              <div className="mt-3 flex flex-wrap items-end gap-2">
-                <label className="text-xs text-muted">New version label
-                  <input className={numField} placeholder={parsed?.policyVersion} value={newVersionLabel} onChange={(e) => setNewVersionLabel(e.target.value)} />
-                </label>
-                <button type="button" disabled={!jsonValid} onClick={() => saveNewVersion(false)} className="rounded-xl px-4 py-2 text-sm font-semibold text-secondary ring-1 ring-white/15 hover:bg-white/10 disabled:opacity-50">Save as new version</button>
-                <button type="button" disabled={!jsonValid} onClick={() => saveNewVersion(true)} className="rounded-xl bg-gradient-to-br from-brand to-brand-dark px-4 py-2 text-sm font-semibold text-on-accent hover:brightness-110 disabled:opacity-50">Save &amp; activate</button>
-              </div>
-            </div>
+            )}
 
             {/* Audit */}
             {audit.length > 0 && (
