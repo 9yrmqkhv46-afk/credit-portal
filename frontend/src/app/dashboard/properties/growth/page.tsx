@@ -97,7 +97,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   return (
     <div className="glass hover-lift rounded-2xl p-5">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
-      <p className="mt-1 font-display text-3xl font-bold tracking-tight text-primary">{value}</p>
+      <p className="mt-1 font-display text-3xl font-extrabold tracking-tight text-primary">{value}</p>
       {sub && <p className="mt-0.5 text-sm font-medium text-secondary">{sub}</p>}
     </div>
   );
@@ -136,7 +136,7 @@ export default function PropertyGrowthPage() {
     <div className="space-y-7 antialiased">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="font-display text-4xl font-bold tracking-tight text-primary">Property Growth &amp; Progress</h1>
+          <h1 className="font-display text-[2.6rem] font-extrabold leading-tight tracking-tight text-primary">Property Growth &amp; Progress</h1>
           <p className="mt-1 text-base font-medium text-secondary">Portfolio capital growth, equity and rental yield over time.</p>
         </div>
         <Link href="/dashboard/profile" className="text-sm font-semibold text-brand hover:text-brand-dark">
@@ -178,7 +178,7 @@ export default function PropertyGrowthPage() {
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="font-display text-xl font-bold tracking-tight text-primary">{p.address}</h3>
+                      <h3 className="font-display text-xl font-extrabold tracking-tight text-primary">{p.address}</h3>
                       <p className="mt-0.5 text-xs font-medium text-muted">
                         {p.type.replace(/_/g, ' ')}{p.postcode ? ` · ${p.postcode}` : ''}
                         {p.includeInServicing === false && (
@@ -187,7 +187,7 @@ export default function PropertyGrowthPage() {
                       </p>
                     </div>
                     <span className="text-right">
-                      <span className="block font-display text-2xl font-bold tracking-tight text-primary">{money(value)}</span>
+                      <span className="block font-display text-2xl font-extrabold tracking-tight text-primary">{money(value)}</span>
                       <span className="text-xs font-medium text-muted">current value</span>
                     </span>
                   </div>
