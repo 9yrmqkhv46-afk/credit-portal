@@ -104,9 +104,20 @@ export interface BankPolicy {
   effectiveTo?: string | null;
   isActive: boolean;
   notes: string;
+  /** Algorithm B policy-fit tags, e.g. FHB_FRIENDLY, PORTFOLIO_INVESTOR_FRIENDLY. */
+  tags?: string[];
   residentialOwnerOcc: ProductPolicy;
   residentialInvestment: ProductPolicy;
   commercialPropertyLight: ProductPolicy;
+}
+
+export type ScenarioPattern = 'FHB_PAYG' | 'UPGRADER_FAMILY' | 'PORTFOLIO_INVESTOR' | 'SELF_EMPLOYED_PRO' | 'COMMERCIAL_BUYER';
+
+export interface PatternRankResult {
+  patterns: ScenarioPattern[];
+  desiredTags: string[];
+  clusterBrandCodes: string[];
+  recommendations: BankRecommendation[];
 }
 
 // ---------------------------------------------------------------------------

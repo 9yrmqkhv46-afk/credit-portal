@@ -95,6 +95,7 @@ function bank(
     id: `${brandCode}-${policyVersion}`,
     bankName, brandCode, policyVersion,
     effectiveFrom: '2026-01-01', effectiveTo: null, isActive: true, notes,
+    tags: BANK_TAGS[brandCode] ?? [],
     residentialOwnerOcc: product(oo),
     residentialInvestment: product(inv),
     commercialPropertyLight: product({ ...com, includeCommercial: true }),
@@ -104,6 +105,20 @@ function bank(
 const SELF_EMP_UPLIFT: SpecialSegmentRules[] = [
   { segment: 'SELF_EMPLOYED', dtiUpliftToCap: 7.0, notes: 'Self-employed with 2yrs financials — DTI uplift.' },
 ];
+
+/** Algorithm B policy-fit tags per bank (used for scenario pattern matching). */
+const BANK_TAGS: Record<string, string[]> = {
+  CBA: ['CONSERVATIVE_BASELINE', 'FHB_FRIENDLY', 'PAYG_FRIENDLY'],
+  NAB: ['PAYG_FRIENDLY', 'FHB_FRIENDLY', 'INVESTOR_FRIENDLY'],
+  WBC: ['CONSERVATIVE_BASELINE', 'PAYG_FRIENDLY'],
+  ANZ: ['PAYG_FRIENDLY', 'INVESTOR_FRIENDLY', 'VARIABLE_INCOME_FRIENDLY'],
+  MQG: ['PORTFOLIO_INVESTOR_FRIENDLY', 'INVESTOR_FRIENDLY', 'SELF_EMPLOYED_FRIENDLY', 'PROFESSIONAL_FRIENDLY'],
+  SUN: ['CONSERVATIVE_BASELINE', 'PAYG_FRIENDLY'],
+  ING: ['TIGHT_DTI', 'PAYG_FRIENDLY', 'CONSERVATIVE_INCOME'],
+  HSBC: ['PORTFOLIO_INVESTOR_FRIENDLY', 'INVESTOR_FRIENDLY', 'PROFESSIONAL_FRIENDLY', 'HIGH_INCOME_FRIENDLY'],
+  SGB: ['CONSERVATIVE_BASELINE', 'PAYG_FRIENDLY', 'FHB_FRIENDLY'],
+  BEN: ['SELF_EMPLOYED_FRIENDLY', 'INVESTOR_FRIENDLY', 'COMMERCIAL_FRIENDLY', 'ALT_LENDER'],
+};
 
 /**
  * Hard-coded 2026 modelling policies for the top-10 Australian lenders.

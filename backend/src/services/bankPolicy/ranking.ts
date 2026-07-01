@@ -6,8 +6,9 @@
  * SECONDARY / LONG_SHOT with a short human-readable reason.
  */
 
-import { BankPolicy, ScenarioInput, BankRecommendation, ProductPolicy, ProductType } from './types';
+import { BankPolicy, ScenarioInput, BankRecommendation, ProductPolicy, ProductType, PatternRankResult } from './types';
 import { runBankCalc } from './engine';
+import { classifyScenario, selectCluster } from './patterns';
 
 const WEIGHTS = {
   serviceabilityMargin: 0.35,
@@ -97,4 +98,18 @@ function buildSummary(
   }
   const breach = calc.reasons.find((r) => r.includes('exceeds') || r.includes('No serviceability') || r.includes('Falls short')) || 'limited serviceability/DTI for this scenario';
   return `${bankName} weak here: ${breach.toLowerCase()}`;
+}
+
+
+/**
+ * Algorithm B then A: classify the scenario into patterns, narrow to a
+ * tag-matched cluster, then rank that cluster quantitatively. The top of
+ * `recommendations` are the recommended lenders.
+ */
+export function rankWithPatternMatching(input: ScenarioInput, policies: BankPolicy[]): PatternRankResult {
+  const active = policies.filter((p) => p.isActive);
+  const patterns = classifyScenario(input);
+  const { cluster, tags } = selectCluster(patterns, active);
+  const recommendations = rankBanksForScenario(input, cluster);
+  return { patterns, desiredTags: tags, clusterBrandCodes: cluster.map((c) => c.brandCode), recommendations };
 }

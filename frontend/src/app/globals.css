@@ -347,9 +347,9 @@ h1, h2, h3, h4 {
     animation: lwMeshDrift 48s ease-in-out infinite;
     will-change: background-position;
   }
-  /* Landing is more vivid; app + admin are calmer. */
+  /* Landing is more vivid; app + admin stay lively but readable. */
   .live-wallpaper[data-variant='app'] .lw-mesh,
-  .live-wallpaper[data-variant='admin'] .lw-mesh { opacity: 0.7; }
+  .live-wallpaper[data-variant='admin'] .lw-mesh { opacity: 0.85; }
 
   /* (5) Skyline / property-graph silhouette band along the bottom. */
   .lw-skyline { top: auto; bottom: 0; height: 44vh; }
@@ -359,7 +359,7 @@ h1, h2, h3, h4 {
   .lw-skyline-front { opacity: 0.42; }
   .lw-skyline-front svg { animation: lwParallax 78s linear infinite; }
   .live-wallpaper[data-variant='app'] .lw-skyline,
-  .live-wallpaper[data-variant='admin'] .lw-skyline { opacity: 0.6; }
+  .live-wallpaper[data-variant='admin'] .lw-skyline { opacity: 0.75; }
 
   /* (6) Faint animated grain (self-contained SVG turbulence — no network). */
   .lw-grain {
@@ -375,10 +375,10 @@ h1, h2, h3, h4 {
     background: radial-gradient(120% 100% at 50% 0%, transparent 45%, rgba(4, 6, 13, 0.42) 100%);
   }
   .lw-scrim-app {
-    background: linear-gradient(180deg, rgba(4, 6, 13, 0.55) 0%, rgba(4, 6, 13, 0.68) 100%);
+    background: linear-gradient(180deg, rgba(4, 6, 13, 0.40) 0%, rgba(4, 6, 13, 0.56) 100%);
   }
   .lw-scrim-admin {
-    background: linear-gradient(180deg, rgba(4, 6, 13, 0.60) 0%, rgba(4, 6, 13, 0.74) 100%);
+    background: linear-gradient(180deg, rgba(4, 6, 13, 0.44) 0%, rgba(4, 6, 13, 0.60) 100%);
   }
 }
 

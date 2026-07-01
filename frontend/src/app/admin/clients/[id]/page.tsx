@@ -226,7 +226,7 @@ export default function AdminClientDetailPage() {
       )}
 
       {/* Top-3 bank recommendations from this client's data */}
-      <AdminBankRecommendations clientId={clientId} />
+      <AdminBankRecommendations clientId={clientId} clientName={client.name} />
 
       {/* Bluehive assessment extras + broker details */}
       {client.clientProfile && (
