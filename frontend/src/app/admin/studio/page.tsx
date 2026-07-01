@@ -27,6 +27,13 @@ const moneyShort = (n: number) => {
 const PASS_COLOR: Record<string, string> = { PASS: 'var(--accent-emerald)', MARGINAL: 'var(--accent-gold)', FAIL: 'var(--accent-crimson)' };
 const AU_STATES = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'];
 
+/** Turn an axios/network error into a readable "status · message" string. */
+function describeErr(e: any): string {
+  if (e?.response) return `${e.response.status} · ${e.response.data?.error || e.response.statusText || 'request failed'}`;
+  if (e?.request) return 'No response from API (network / CORS / API URL).';
+  return e?.message || 'Request failed';
+}
+
 type Purpose = 'OWNER_OCC' | 'INVESTMENT' | 'COMMERCIAL_PROPERTY_LIGHT';
 type Repayment = 'PI' | 'IO';
 
@@ -190,6 +197,8 @@ export default function StudioPage() {
   const [scene, setScene] = useState<Scene>('compare');
   const [loading, setLoading] = useState(false);
   const [offline, setOffline] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [analyticsWarn, setAnalyticsWarn] = useState('');
 
   const [rows, setRows] = useState<any[]>([]);
   const [bestBank, setBestBank] = useState<string>('');
@@ -208,29 +217,40 @@ export default function StudioPage() {
     const t = setTimeout(async () => {
       setLoading(true);
       const body = buildScenario(inputs);
+      // Primary batch — the core studio (lender race + repayments).
       try {
         const [cmp, am] = await Promise.all([
           api.post('/bank-policies/compare', body),
           api.post('/bank-policies/amortization', { principal: inputs.loanAmount, annualRate: inputs.rate / 100, termYears: inputs.term, ioYears: inputs.repayment === 'IO' ? inputs.ioYears : 0 }),
         ]);
         if (id !== reqId.current) return;
-        setOffline(false);
+        setOffline(false); setErrorMsg('');
         setRows(cmp.data.rows || []);
         setAmort(am.data);
         const best = cmp.data.bestPick || cmp.data.rows?.[0]?.brandCode;
         setBestBank(best || '');
+
+        // Secondary batch — per-bank analytics. A failure here must NOT blank
+        // the studio; we keep the primary results and just note it.
         if (best) {
-          const [st, se, op, af] = await Promise.all([
-            api.post(`/bank-policies/${best}/stress`, { scenario: body, shockBps: 300 }),
-            api.post(`/bank-policies/${best}/sensitivity`, { scenario: body, variable: 'interestRate', steps: 9 }),
-            api.post(`/bank-policies/${best}/optimize`, { scenario: body }),
-            api.post(`/bank-policies/${best}/affordability`, { scenario: body, savings: inputs.savings, state: inputs.state }),
-          ]);
-          if (id !== reqId.current) return;
-          setStress(st.data); setSens(se.data); setOpt(op.data); setAfford(af.data);
+          try {
+            const [st, se, op, af] = await Promise.all([
+              api.post(`/bank-policies/${best}/stress`, { scenario: body, shockBps: 300 }),
+              api.post(`/bank-policies/${best}/sensitivity`, { scenario: body, variable: 'interestRate', steps: 9 }),
+              api.post(`/bank-policies/${best}/optimize`, { scenario: body }),
+              api.post(`/bank-policies/${best}/affordability`, { scenario: body, savings: inputs.savings, state: inputs.state }),
+            ]);
+            if (id !== reqId.current) return;
+            setStress(st.data); setSens(se.data); setOpt(op.data); setAfford(af.data);
+            setAnalyticsWarn('');
+          } catch (e2) {
+            if (id !== reqId.current) return;
+            setStress(null); setSens(null); setOpt(null); setAfford(null);
+            setAnalyticsWarn(describeErr(e2));
+          }
         }
-      } catch {
-        if (id === reqId.current) setOffline(true);
+      } catch (e) {
+        if (id === reqId.current) { setOffline(true); setErrorMsg(describeErr(e)); }
       } finally {
         if (id === reqId.current) setLoading(false);
       }
@@ -317,7 +337,7 @@ export default function StudioPage() {
               <button key={s} type="button" onClick={() => setScene(s)} className={`rounded-full px-4 py-1.5 text-sm font-medium ring-1 transition ${scene === s ? 'bg-brand/20 text-brand ring-brand/50' : 'text-secondary ring-white/15 hover:bg-white/10'}`}>{label}</button>
             ))}
             <span className="ml-auto flex items-center gap-2 text-xs text-muted">
-              {loading ? <><span className="inline-block h-2 w-2 animate-ping rounded-full bg-teal" /> recomputing…</> : offline ? <span className="text-gold">API offline — start the backend to go live</span> : <><span className="inline-block h-2 w-2 rounded-full bg-emerald" /> up to date</>}
+              {loading ? <><span className="inline-block h-2 w-2 animate-ping rounded-full bg-teal" /> recomputing…</> : offline ? <span className="text-crimson">API error: {errorMsg}</span> : analyticsWarn ? <span className="text-gold">Analytics unavailable: {analyticsWarn}</span> : <><span className="inline-block h-2 w-2 rounded-full bg-emerald" /> up to date</>}
             </span>
           </div>
 
@@ -326,7 +346,7 @@ export default function StudioPage() {
               <div className="rounded-2xl glass-2 p-5">
                 <h3 className="mb-4 font-display text-lg font-semibold text-primary">Lender capacity race</h3>
                 <div className="space-y-2.5">
-                  {sortedRows.length === 0 && <EmptyRows offline={offline} />}
+                  {sortedRows.length === 0 && <EmptyRows offline={offline} errorMsg={errorMsg} />}
                   {sortedRows.map((r, idx) => (
                     <div key={r.brandCode} className="group">
                       <div className="mb-1 flex items-center justify-between text-sm">
@@ -475,8 +495,14 @@ function CostRow({ label, value }: { label: string; value?: number }) {
   );
 }
 
-function EmptyRows({ offline }: { offline: boolean }) {
-  if (offline) return <p className="py-6 text-center text-sm text-gold">Couldn&rsquo;t reach the lending engine. Start the backend API and adjust a dial to go live.</p>;
+function EmptyRows({ offline, errorMsg }: { offline: boolean; errorMsg?: string }) {
+  if (offline) return (
+    <div className="rounded-xl bg-danger-light p-4 text-sm text-crimson ring-1 ring-crimson/30">
+      <p className="font-semibold">Couldn&rsquo;t reach the lending engine.</p>
+      <p className="mt-1 text-xs">{errorMsg || 'Unknown error.'}</p>
+      <p className="mt-2 text-[11px] text-secondary">401 → sign in again · 404 → backend still deploying · 5xx → server error · &ldquo;No response&rdquo; → check NEXT_PUBLIC_API_URL / CORS.</p>
+    </div>
+  );
   return (
     <div className="space-y-2">
       {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-8 w-full" />)}
